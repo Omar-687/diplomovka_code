@@ -1,0 +1,178 @@
+''
+
+    there are softvares to solve problems where you put what you want to minimize
+    and constraints
+    '''
+    def __init__(self, objective, interface, constraint_type):
+        self.objective = objective
+        self.constraint_type = constraint_type
+        self.interface = interface
+        print('aaa')
+
+
+
+    @staticmethod
+    def charging_rate_bounds(rates, active_sessions:List[SessionInfo], evse_indices:List[str]):
+        '''
+
+        :param rates: list of rates for prediction horizon t therefore the array dimensions are (N,T)
+        :param active_sessions:
+        :return: upper and lower bound constraints for each charging rate.
+        '''
+
+
+        ub, lb = np.zeros(rates.shape), np.zeros(rates.shape)
+        for session in active_sessions:
+            i = evse_indices.index(session.station_id)
+
+            lb[
+            i,
+            session.arrival_offset: session.arrival_offset
+                                    + session.remaining_time,
+            ] = session.min_rates
+            ub[
+            i,
+            session.arrival_offset: session.arrival_offset
+                                    + session.remaining_time,
+            ] = session.max_rates
+        ub[ub < lb] = lb[ub < lb]
+        return {
+            "charging_rate_bounds.lb": rates >= lb,
+            "charging_rate_bounds.ub": rates <= ub,
+        }
+
+    @staticmethod
+    def energy_constraints(
+            rates,
+            active_sessions: List[SessionInfo],
+            infrastructure: InfrastructureInfo,
+            period,
+            enforce_energy_equality=False,
+    ):
+
+        """Get constraints on the energy delivered for each session.
+
+                Args:
+                    rates (cp.Variable): cvxpy variable representing all charging rates. Shape should be (N, T) where N is the
+                        total number of EVSEs in the system and T is the length of the optimization horizon.
+                    active_sessions (List[SessionInfo]): List of SessionInfo objects for all active charging sessions.
+                    infrastructure (InfrastructureInfo): InfrastructureInfo object describing the electrical infrastructure at
+                        a site.
+                    period (int): Length of each discrete time period. (min)
+                    enforce_energy_equality (bool): If True, energy delivered must be equal to energy requested for each EV.
+                        If False, energy delivered must be less than or equal to request.
+
+                Returns:
+                    List[cp.Constraint]: List of energy delivered constraints for each session.
+                """
+        constraints = {}
+        for session in active_sessions:
+            i = infrastructure.get_station_index(session.station_id)
+            planned_energy = np.sum(
+                rates[
+                i,
+                session.arrival_offset: session.arrival_offset
+                                        + session.remaining_time,
+                ]
+            )
+            planned_energy *= infrastructure.voltages[i] * period / 1e3 / 60
+            constraint_name = f"energy_constraints.{session.session_id}"
+            if enforce_energy_equality:
+                constraints[constraint_name] = (
+                        planned_energy == session.remaining_demand
+                )
+            else:
+                constraints[constraint_name] = (
+                        planned_energy <= session.remaining_demand
+                )
+        return constraints
+
+    @staticmethod
+    def peak_constraint(
+            rates, peak_limit: Union[float, List[float], np.ndarray]
+    ):
+        """Get constraints enforcing infrastructure limits.
+
+        Args:
+            rates (cp.Variable): cvxpy variable representing all charging rates. Shape should be (N, T) where N is the
+                total number of EVSEs in the system and T is the length of the optimization horizon.
+            peak_limit (Union[float, List[float], np.ndarray]): Limit on aggregate peak current. If None, no limit is
+                enforced.
+
+        Returns:
+            List[cp.Constraint]: List of constraints, one for each bottleneck in the electrical infrastructure.
+        """
+        if peak_limit is not None:
+            return {"peak_constraint": np.sum(rates, axis=0) <= peak_limit}
+        return {}
+
+    @staticmethod
+    def infrastructure_constraints(
+            rates, infrastructure: InfrastructureInfo, constraint_type="SOC"
+    ):
+        """Get constraints enforcing infrastructure limits.
+
+                Args:
+                    rates (cp.Variable): cvxpy variable representing all charging rates. Shape should be (N, T) where N is the
+                        total number of EVSEs in the system and T is the length of the optimization horizon.
+                    infrastructure (InfrastructureInfo): InfrastructureInfo object describing the electrical infrastructure at
+                        a site.
+                    constraint_type (str): String representing which constraint type to use. Options are 'SOC' for Second Order
+                        Cone or 'LINEAR' for linearized constraints.
+
+                Returns:
+                    List[cp.Constraint]: List of constraints, one for each bottleneck in the electrical infrastructure.
+                """
+        # If constraint_matrix is empty, no need to add infrastructure
+        # constraints.
+        if (
+                infrastructure.constraint_matrix is None
+                or infrastructure.constraint_matrix.shape == (0, 0)
+        ):
+            return {}
+        constraints = {}
+        if constraint_type == "SOC":
+            if infrastructure.phases is None:
+                raise ValueError(
+                    "phases is required when using SOC infrastructure constraints."
+                )
+            phase_in_rad = np.deg2rad(infrastructure.phases)
+            for j, v in enumerate(infrastructure.constraint_matrix):
+                a = np.stack([v * np.cos(phase_in_rad), v * np.sin(phase_in_rad)])
+                constraint_name = (
+                    f"infrastructure_constraints." f"{infrastructure.constraint_ids[j]}"
+                )
+
+                # look at cp.norm does
+                constraints[constraint_name] = (
+                        np.linalg.norm(a @ rates, axis=0) <= infrastructure.constraint_limits[j]
+                )
+        elif constraint_type == "LINEAR":
+            for j, v in enumerate(infrastructure.constraint_matrix):
+                constraint_name = (
+                    f"infrastructure_constraints.{infrastructure.constraint_ids[j]}"
+                )
+
+    constraints[constraint_name] = (
+                        np.abs(v) @ rates <= infrastructure.constraint_limits[j]
+                )
+        else:
+            raise ValueError(
+                "Invalid infrastructure constraint type: {0}. Valid options are SOC or AFFINE.".format(
+                    constraint_type
+                )
+            )
+        return constraints
+
+
+    # def
+    # def
+    def build_problem(self,
+        active_sessions: List[SessionInfo],
+        infrastructure: InfrastructureInfo,
+        peak_limit: Optional[Union[float, List[float], np.ndarray]] = None,
+        prev_peak: float = 0,):
+            ...
+
+
+
