@@ -1,7 +1,7 @@
 from acnportal.algorithms import BaseAlgorithm
 import warnings
 
-class MpcController(BaseAlgorithm):
+class MyMpcAlgorithm(BaseAlgorithm):
     def __init__(self,
                  objective,
                  constraint_type="SOC",
