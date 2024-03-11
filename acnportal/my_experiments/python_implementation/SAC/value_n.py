@@ -30,7 +30,7 @@ class ValueNetwork(nn.Module):
     # cycles or loops
     def __init__(self, state_dim, neurons_per_hidden_layer=256):
         super(ValueNetwork, self).__init__()
-        self.activation_function = nn.ReLU
+        self.activation_function = nn.ReLU()
         # not sure if there should be linear layer
         # do i need to change it or
 
@@ -49,10 +49,19 @@ class ValueNetwork(nn.Module):
     # bias value is not directly mentioned in the book
     # 3*10^-3 they used
     def initialize_weights(self) -> None:
-        nn.init.normal_(self.input_layer.weight, mean=0.0, std=0.01)
-        nn.init.normal_(self.hidden_layer_1.weight, mean=0.0, std=0.01)
-        nn.init.normal_(self.hidden_layer_2.weight, mean=0.0, std=0.01)
-        nn.init.normal_(self.output_layer.weight, mean=0.0, std=0.01)
+        # nn.init.normal_(self.input_layer.weight, mean=0.0, std=1)
+        # nn.init.normal_(self.hidden_layer_1.weight, mean=0.0, std=1)
+        # nn.init.normal_(self.hidden_layer_2.weight, mean=0.0, std=1)
+        # nn.init.normal_(self.output_layer.weight, mean=0.0, std=1)
+
+        # nn.init.normal_(self.input_layer.weight, mean=0.0, std=0.01)
+        # nn.init.normal_(self.hidden_layer_1.weight, mean=0.0, std=0.01)
+        # nn.init.normal_(self.hidden_layer_2.weight, mean=0.0, std=0.01)
+        # nn.init.normal_(self.output_layer.weight, mean=0.0, std=0.01)
+        nn.init.uniform_(self.input_layer.weight, 0, 1)
+        nn.init.uniform_(self.hidden_layer_1.weight, 0, 1)
+        nn.init.uniform_(self.hidden_layer_2.weight, 0, 1)
+        nn.init.uniform_(self.output_layer.weight, 0, 1)
     def initialize_biases(self) -> None:
         nn.init.constant_(self.input_layer.bias, 0)
         nn.init.constant_(self.hidden_layer_1.bias, 0)

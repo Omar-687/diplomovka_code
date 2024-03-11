@@ -30,24 +30,37 @@ class PolicyNetwork(nn.Module):
 
 
     def initialize_weights(self) -> None:
-        nn.init.normal_(self.input_layer.weight, mean=0.0, std=0.01)
-        nn.init.normal_(self.hidden_layer_1.weight, mean=0.0, std=0.01)
-        nn.init.normal_(self.hidden_layer_2.weight, mean=0.0, std=0.01)
-        nn.init.normal_(self.output_layer.weight, mean=0.0, std=0.01)
+        # nn.init.normal_(self.input_layer.weight, mean=0, std=0.01)
+        # nn.init.normal_(self.hidden_layer_1.weight, mean=0, std=0.01)
+        # nn.init.normal_(self.hidden_layer_2.weight, mean=0, std=0.01)
+        # nn.init.normal_(self.output_layer.weight, mean=0, std=0.01)
+        # nn.init.normal_(self.mean_layer.weight, mean=0,std=0.01)
+        # nn.init.normal_(self.covariance_layer.weight, mean=0,std=0.01)
+
+        nn.init.uniform_(self.input_layer.weight, 0,1)
+        nn.init.uniform_(self.hidden_layer_1.weight, 0,1)
+        nn.init.uniform_(self.hidden_layer_2.weight, 0,1)
+        nn.init.uniform_(self.output_layer.weight, 0, 1)
+        nn.init.uniform_(self.mean_layer.weight, 0,1)
+        nn.init.uniform_(self.covariance_layer.weight, 0,1)
     def initialize_biases(self) -> None:
         nn.init.constant_(self.input_layer.bias, 0)
         nn.init.constant_(self.hidden_layer_1.bias, 0)
         nn.init.constant_(self.hidden_layer_2.bias, 0)
         nn.init.constant_(self.output_layer.bias, 0)
+        nn.init.constant_(self.mean_layer.bias, 0)
+        nn.init.constant_(self.covariance_layer.bias, 0)
+
+
 
     #     TODO fix activation function it shouldnt give RELU instance
-    def forward(self, state) -> [torch.Tensor, torch.Tensor]:
+    def forward(self, state, log_std_min=-20, log_std_max=2) -> [torch.Tensor, torch.Tensor]:
         x = self.activation_function(self.input_layer(state))
         x = self.activation_function(self.hidden_layer_1(x))
         x = self.activation_function(self.hidden_layer_2(x))
         mean = self.mean_layer(x)
         # TODO: look if this is correct way of getting those values
-        std_deviation = self.covariance_layer(x)
+        std_deviation = torch.clamp(self.covariance_layer(x), min=log_std_min, max=log_std_max)
         return mean, std_deviation
     def policy_evaluation(self, state) -> [torch.Tensor, torch.Tensor]:
 
