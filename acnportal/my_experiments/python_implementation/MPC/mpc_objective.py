@@ -4,20 +4,8 @@ import cvxpy as cp
 from typing import List, Union, Optional, Any
 import numpy as np
 class Objective:
-    def __init__(self,
-                 # infrastructure:InfrastructureInfo,
-                 # interface:Interface
-
-                 ):
-        # self.infrastructure:InfrastructureInfo = {}
-        # self.all_chosen_objectives = {}
-        # self.infrastructure = infrastructure
-        # self.objectives_arr = []
+    def __init__(self):
         pass
-
-
-
-    # generate objective
 
     # TODO: is it written correctly? - objective_list:List[ObjectiveEnum, Any]
     # TODO: all functions here must share input arguments so we can ease the for cycle
@@ -26,21 +14,26 @@ class Objective:
                            objective_list,
                            infrastructure: InfrastructureInfo,
                            interface: Interface,
-                           optimisation_horizon_T):
+                           optimisation_horizon):
         res = 0
         for objection in objective_list:
             objection_name, objection_relative_weight, objection_function = objection
-            res += objection_function(rates=rates,
+            # if i use relative_weights it gives user warning to choose other solver
+            res += (
+                    # objection_relative_weight *
+                    objection_function(rates=rates,
                                       relative_weight=objection_relative_weight,
                                       infrastructure=infrastructure,
                                       interface=interface,
-                                      optimisation_horizon_T=optimisation_horizon_T)
+                                      optimisation_horizon=optimisation_horizon))
         return res
     #     objective functions
-    def choose_energy_maximisation_objective(self, relative_weight=1):
+    def choose_energy_maximisation_objective(self, relative_weight=1, turn_off_objective=False):
         # relative weight must be above 0, a > 0, where weight is a
         if relative_weight <= 0:
             raise ValueError("Relative weight of objective must be positive!")
+        if turn_off_objective:
+            return ObjectiveEnum.ENERGY_MAXIMISATION.value, 0, self.maximize_charging_energy
         return ObjectiveEnum.ENERGY_MAXIMISATION.value, relative_weight, self.maximize_charging_energy
 
     def charging_power(self,rates, infrastructure, **kwargs):
@@ -61,17 +54,33 @@ class Objective:
                                  relative_weight,
                                  infrastructure: InfrastructureInfo,
                                  interface: Interface,
-                                 optimisation_horizon_T):
+                                 optimisation_horizon):
         # obj = None
         # self.objectives_arr.append(obj)
+        # (T,N) * (N,1)
+        # voltage for each evse (N,T): voltages
+        voltages_matrix = []
+        for i in range(rates.shape[1]):
+            voltages_matrix.append(infrastructure.voltages)
+
+        # (N,T) * (T,N)
+        voltages_matrix = np.array(voltages_matrix).T
+        period_between_timesteps_in_mins = interface.period
+        watts_per_min = voltages_matrix * rates * period_between_timesteps_in_mins
+        kilo_watts_per_min = watts_per_min / 1000
+        kilo_watts_per_hour = kilo_watts_per_min / 60
         return self.total_energy(rates,infrastructure,interface)
         # return relative_weight * cp.sum(rates)
 
     #
-    def choose_consumer_cost_minimisation_objective(self,relative_weight=1):
+    def choose_consumer_cost_minimisation_objective(self, relative_weight=1,turn_off_objective=False):
         # relative weight must be above 0, a > 0, where weight is a
         if relative_weight <= 0:
             raise ValueError("Relative weight of objective must be positive!")
+
+        if turn_off_objective:
+            return ObjectiveEnum.CUSTOMER_PROFIT.value, 0, self.minimize_customers_chaging_costs
+
         # cost minimization and profit maximisation are equivalent problems
         return ObjectiveEnum.CUSTOMER_PROFIT.value, relative_weight, self.minimize_customers_chaging_costs
     def minimize_customers_chaging_costs(self,
@@ -79,14 +88,15 @@ class Objective:
                                          relative_weight,
                                          infrastructure: InfrastructureInfo,
                                          interface: Interface,
-                                         optimisation_horizon_T
+                                         optimisation_horizon
                                          ):
         current_time = interface.current_time
         energy_costs = interface.get_prices(length=rates.shape[0],
                                             start=current_time)
 
         # TODO:dont use * when multiplying matrices
-        return relative_weight*cp.sum(energy_costs * rates)
+        # TODO: fix so it doesnt return ideal values for zero vector
+        return cp.sum(energy_costs * rates)
 
 
 
@@ -95,28 +105,24 @@ class Objective:
 
 
     # Regularizers
-    def choose_quick_charging_objective(self, relative_weight=1):
+    def choose_quick_charging_objective(self, relative_weight=1, turn_off_objective=False):
         if relative_weight <= 0:
             raise ValueError("Relative weight of objective must be positive!")
+
+        if turn_off_objective:
+            return ObjectiveEnum.QUICK_CHARGING.value, 0, self.charge_as_quickly_as_possible
+
         return ObjectiveEnum.QUICK_CHARGING.value, relative_weight, self.charge_as_quickly_as_possible
     def charge_as_quickly_as_possible(self,
                                       rates: cp.Variable,
                                       relative_weight,
                                       infrastructure: InfrastructureInfo,
                                       interface: Interface,
-                                      optimisation_horizon_T
+                                      optimisation_horizon):
+        T = len(optimisation_horizon) - 1
+        return cp.sum([(T - t) * cp.sum(rates[:, t]) for t in range(0, T)])
 
-                                      ):
 
-        # here we assume optim horizon is array of ints
-        # where to get current time??? from interface
-        util_value = 0
-        for t in optimisation_horizon_T:
-            util_value += ((optimisation_horizon_T[-1] - t + 1)
-            / optimisation_horizon_T[-1]) * cp.sum(rates[:, t])
-        return relative_weight*util_value
-
-    # what it exactly is?
     def equal_share(self,
                     rates: cp.Variable,
                     relative_weight,
@@ -124,7 +130,7 @@ class Objective:
                     interface: Interface,
                     optimisation_horizon_T
                     ):
-
+        # makes utility function strictly concave, what makes the solution optimal
         # from https://www.ncl.ac.uk/media/wwwnclacuk/cesi/files/20190814_Adaptive%20Charging%20Network_webinar.pdf presentation
 
         # TODO: is cp.square same as np.square?

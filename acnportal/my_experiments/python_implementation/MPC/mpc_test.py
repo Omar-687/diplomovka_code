@@ -20,39 +20,51 @@ def test_functions():
     # rates = [20, 30]
     MPCOptimizer.charging_rate_bounds(rates=new_rates,active_sessions=[],evse_indices=[])
 
-def test1():
+
+def setup():
     # -- Experiment Parameters ---------------------------------------------------------------------------------------------
     timezone = pytz.timezone('America/Los_Angeles')
-    start = timezone.localize(datetime(2018, 9, 5))
-    end = timezone.localize(datetime(2018, 9, 6))
+    start = timezone.localize(datetime(2018, 9, 4))
+    end = timezone.localize(datetime(2018, 9, 5))
+
+    # period should be small number, otherwise we optimise only few timesteps
     period = 5  # minute
-    voltage = 220  # volts
+    # lowering voltage will cause slower electric current flow
+    # therefore less energy will be provided to ev
+    voltage = 100  # volts
     default_battery_power = 32 * voltage / 1000  # kW
     site = 'caltech'
     signals = {'tariff': TimeOfUseTariff('sce_tou_ev_4_march_2019')}
 
     # -- Network -----------------------------------------------------------------------------------------------------------
+
+    # TODO: to make it work also for non basic evse, we need to add projection of rates into feasible pilot signals
     cn = acnsim.sites.caltech_acn(basic_evse=True, voltage=voltage)
-
-
 
     # -- Events ------------------------------------------------------------------------------------------------------------
     API_KEY = 'DEMO_TOKEN'
     events = acnsim.acndata_events.generate_events(API_KEY, site, start, end, period, voltage, default_battery_power)
+    return cn, start, period, signals, events
 
+def test1():
+    cn, start, period, signals, events = setup()
+    print()
+    print('Num of ev arrivals: ', len(events))
     # my code
     obj = Objective()
     objective = [
-        obj.choose_energy_maximisation_objective(),
+        # obj.choose_energy_maximisation_objective(turn_off_objective=True),
+        obj.choose_energy_maximisation_objective(turn_off_objective=True),
+        obj.choose_quick_charging_objective(turn_off_objective=True)
         # obj.choose_consumer_cost_minimisation_objective()
         # obj.minimize_customers_chaging_costs(obj),
         # obj.charge_as_quickly_as_possible(obj),
         # smoothen_charging_rates
     ]
     sch_mpc = MyMpcAlgorithm(objective=objective,
-                             verbose=False,
                              constraint_type='SOC',
-                             solver=cp.ECOS)
+                             solver=cp.ECOS,
+                             verbose=False,)
 
     sim_mpc = acnsim.Simulator(deepcopy(cn),
                                sch_mpc,
@@ -90,9 +102,20 @@ def test1():
 #    TODO: add adacharge here
 
 
+def test_solvers():
+    cn, start, period, signals, events = setup()
+    print()
+    print('Num of ev arrivals: ', len(events))
+
+    testing_solvers = [cp.ECOS, cp.CLARABEL]
+
+    for i in range(len(testing_solvers)):
+        ...
+
 
 def print_results(network ,simulations):
     cn = deepcopy(network)
+
     for sim_num, simulation in enumerate(simulations, start=1):
         sim = deepcopy(simulation)
         r = {'proportion_of_energy_delivered': acnsim.proportion_of_energy_delivered(sim),
@@ -108,6 +131,8 @@ def print_results(network ,simulations):
         print(r)
         print()
         print()
+
+
 def run():
     test1()
     # test_functions()
