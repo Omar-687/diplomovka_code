@@ -4,6 +4,8 @@ This repository is designed for implementing algorithms which solve ev charging 
 
 We implemented those algorithms:
 1. Smoothed Least Laxity First
+
+
 article where the algorithm is described:
 Yorie Nakahira, Niangjun Chen, Lijun Chen, and Steven H. Low. 2017. Smoothed Least-laxity-first Algorithm for EV Charging. In Proceedings of the Eighth International Conference on Future Energy Systems (e-Energy '17). Association for Computing Machinery, New York, NY, USA, 242–251. https://doi.org/10.1145/3077839.3077864
 
