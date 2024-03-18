@@ -26,6 +26,7 @@ class MPCOptimizer:
 
         # TODO: adjust solver settings for better performance
         scheduling_problem.solve(solver=solver,
+                                 feastol = 1e-2, reltol_inacc = 1e-5,
                                  verbose=verbose)
 
         if scheduling_problem.status not in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE]:

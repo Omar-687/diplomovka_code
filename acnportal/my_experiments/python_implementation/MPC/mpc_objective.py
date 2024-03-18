@@ -59,17 +59,16 @@ class Objective:
         # self.objectives_arr.append(obj)
         # (T,N) * (N,1)
         # voltage for each evse (N,T): voltages
-        voltages_matrix = []
-        for i in range(rates.shape[1]):
-            voltages_matrix.append(infrastructure.voltages)
-
-        # (N,T) * (T,N)
-        voltages_matrix = np.array(voltages_matrix).T
-        period_between_timesteps_in_mins = interface.period
-        watts_per_min = voltages_matrix * rates * period_between_timesteps_in_mins
-        kilo_watts_per_min = watts_per_min / 1000
-        kilo_watts_per_hour = kilo_watts_per_min / 60
-        return self.total_energy(rates,infrastructure,interface)
+        # voltages_matrix = np.zeros(shape=rates.shape)
+        # for i in range(rates.shape[1]):
+        #     voltages_matrix[:, i] = infrastructure.voltages
+        # # voltages_matrix = np.array(voltages_matrix).T
+        # period_between_timesteps_in_mins = interface.period
+        # watts_per_min = cp.multiply(rates, voltages_matrix) * period_between_timesteps_in_mins
+        # kilo_watts_per_min = watts_per_min / 1000
+        # kilo_watts_per_hour = kilo_watts_per_min / 60
+        return cp.sum(rates)
+        # return self.total_energy(rates,infrastructure,interface)
         # return relative_weight * cp.sum(rates)
 
     #
@@ -120,21 +119,53 @@ class Objective:
                                       interface: Interface,
                                       optimisation_horizon):
         T = len(optimisation_horizon) - 1
-        return cp.sum([(T - t) * cp.sum(rates[:, t]) for t in range(0, T)])
+        return cp.sum([((T - t + 1)/T) * cp.sum(rates[:, t]) for t in range(0, T)])
 
 
+
+
+    def choose_equal_share_objective(self, relative_weight=1, turn_off_objective=False):
+        if relative_weight <= 0:
+            raise ValueError("Relative weight of objective must be positive!")
+
+        if turn_off_objective:
+            return ObjectiveEnum.EQUAL_SHARE.value, 0, self.equal_share
+
+        return ObjectiveEnum.EQUAL_SHARE.value, relative_weight, self.equal_share
     def equal_share(self,
                     rates: cp.Variable,
                     relative_weight,
                     infrastructure: InfrastructureInfo,
                     interface: Interface,
-                    optimisation_horizon_T
+                    optimisation_horizon
                     ):
         # makes utility function strictly concave, what makes the solution optimal
         # from https://www.ncl.ac.uk/media/wwwnclacuk/cesi/files/20190814_Adaptive%20Charging%20Network_webinar.pdf presentation
 
         # TODO: is cp.square same as np.square?
         return -cp.sum(cp.square(rates))
+
+
+    def smoothing(self,
+                  rates: cp.Variable,
+                  relative_weight,
+                  infrastructure: InfrastructureInfo,
+                  interface: Interface,
+                  optimisation_horizon):
+        # val = 0
+        # for i in range(rates.shape[0]):
+        #     for t in range(rates.shape[1]):
+        #         val += -(rates[i, t] - rates[i, t - 1]) ** 2
+        return -cp.sum([(rates[:, t] - rates[:, t - 1])**2 for t in range(1, rates.shape[1])])
+
+    def choose_smoothing_objective(self, relative_weight=1, turn_off_objective=False):
+        if relative_weight <= 0:
+            raise ValueError("Relative weight of objective must be positive!")
+
+        if turn_off_objective:
+            return ObjectiveEnum.SMOOTHING, 0, self.smoothing
+
+        return ObjectiveEnum.SMOOTHING, relative_weight, self.smoothing
 
 
 
