@@ -4,7 +4,6 @@ import numpy as np
 import cvxpy as cp
 from acnportal.acnsim.interface import Interface, SessionInfo, InfrastructureInfo
 
-
 class InfeasibilityException(Exception):
     pass
 
@@ -315,7 +314,10 @@ class AdaptiveChargingOptimization:
         prob = cp.Problem(
             problem_dict["objective"], list(problem_dict["constraints"].values())
         )
-        prob.solve(solver=self.solver, verbose=verbose)
+        if self.solver == cp.OSQP:
+            prob.solve(solver=self.solver, verbose=verbose,alpha=1)
+        else:
+            prob.solve(solver=self.solver, verbose=verbose)
         if prob.status not in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE]:
             raise InfeasibilityException(f"Solve failed with status {prob.status}")
         return problem_dict["variables"]["rates"].value

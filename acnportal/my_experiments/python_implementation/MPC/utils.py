@@ -9,13 +9,17 @@ from datetime import datetime, timedelta
 
 def plot_charging_profiles(simulations, evs, period=5):
     for simulation in simulations:
-        fig1, axs1 = plt.subplots(len(evs), figsize=(10, len(evs) * 3))
+        fig1, axs1 = plt.subplots(len(evs), figsize=(10, len(evs) * 3), sharey=True)
         for plot_idx, ev in enumerate(evs, start=0):
             evse_index = simulation.network.station_ids.index(ev.station_id)
             session_len = ev.departure - ev.arrival
             x = [simulation.start + timedelta(minutes=period * ev.arrival) + timedelta(minutes=period * i) for i in range(session_len)]
             charging_profile = simulation.charging_rates[evse_index][ev.arrival:ev.departure]
             axs1[plot_idx].plot(x, charging_profile)
+            plt.xlabel('Time [K]')
+
+            plt.yticks([0, 16, 32])
+            plt.ylabel('Pilot signal sent by evse [A]')
         plt.show()
     # Some example data to display
     # x = np.linspace(0, 2 * np.pi, 400)

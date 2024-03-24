@@ -1,6 +1,9 @@
 from unittest import TestCase
 from unittest.mock import Mock
-from adacharge.adaptive_charging_optimization import *
+from ..adaptive_charging_optimization import *
+
+
+# from adacharge.adaptive_charging_optimization import *
 from acnportal.algorithms.tests.generate_test_cases import *
 from acnportal.algorithms.tests.testing_interface import TestingInterface
 import time
@@ -344,31 +347,38 @@ class TestLargeFeasibleSinglePhaseNetworkSOCConstraints(BaseAlgoTestScenarios):
 
 
 # TODO (zach): It is still unclear why OSQP fails here.
-# class TestLargeFeasibleSinglePhaseOSQP(BaseAlgoTestScenarios):
-#     def setUp(self):
-#         super().setUp()
-#         self.energy_demand = 10
-#         self.horizon = 12*12
-#         N = 54
-#         energy_demand = [self.energy_demand] * N
-#         sessions_dict = session_generator(num_sessions=N,
-#                                           arrivals=[0] * N,
-#                                           departures=[self.horizon] * N,
-#                                           remaining_energy=energy_demand,
-#                                           requested_energy=energy_demand,
-#                                           max_rates=[self.max_rate] * N)
-#         infra_dict = single_phase_single_constraint(num_evses=N, limit=32*N/3)
-#         interface = self.interface(sessions_dict, infra_dict)
-#
-#         self.infrastructure = interface.infrastructure_info()
-#         self.sessions = interface.active_sessions()
-#
-#         asa = AdaptiveChargingOptimization([DEFAULT_OBJECTIVE[0]], interface,
-#                                            constraint_type='LINEAR',
-#                                            solver='OSQP')
-#         start_time = time.time()
-#         self.rates = asa.solve(self.sessions, self.infrastructure)
-#         print(time.time() - start_time)
+# ECOS seems to work but OSPQ doesnt work
+
+class TestLargeFeasibleSinglePhaseOSQP(BaseAlgoTestScenarios):
+    def setUp(self):
+        super().setUp()
+        self.energy_demand = 10
+        self.horizon = 12*12
+        N = 54
+        energy_demand = [self.energy_demand] * N
+        sessions_dict = session_generator(num_sessions=N,
+                                          arrivals=[0] * N,
+                                          departures=[self.horizon] * N,
+                                          remaining_energy=energy_demand,
+                                          requested_energy=energy_demand,
+                                          max_rates=[self.max_rate] * N)
+        infra_dict = single_phase_single_constraint(num_evses=N, limit=32*N/3)
+        interface = self.interface(sessions_dict, infra_dict)
+
+        self.infrastructure = interface.infrastructure_info()
+        self.sessions = interface.active_sessions()
+
+        asa = AdaptiveChargingOptimization([DEFAULT_OBJECTIVE[0]], interface,
+                                           constraint_type='LINEAR',
+                                           solver='OSQP')
+        # asa = AdaptiveChargingOptimization([DEFAULT_OBJECTIVE[0]], interface,
+        #                                    constraint_type='LINEAR',
+        #                                    solver='ECOS')
+
+
+        start_time = time.time()
+        self.rates = asa.solve(self.sessions, self.infrastructure)
+        print(time.time() - start_time)
 
 
 class TestLargeFeasibleThreePhaseSOC(BaseAlgoTestScenarios):

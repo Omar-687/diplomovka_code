@@ -6,6 +6,9 @@ import random
 from mpc_optim import  *
 import cvxpy as cp
 import numpy
+from acnportal.acnsim.events import PluginEvent
+from acnportal.acnsim.models import Battery
+from acnportal.acnsim.models import EV
 from objective_enum import ObjectiveEnum
 from mpc_objective import Objective
 from utils import plot_charging_profiles
@@ -55,13 +58,13 @@ class SmoothedLLF(BaseAlgorithm):
                 maximum_laxity_Lt_upper_bound = ev_laxity
 
 
-        error_tolerance = 1e-6
-        max_iterations = 300
+        error_tolerance = 1e-4
+        max_iterations = 600
         iteration = 0
         update_schedule = {}
         L_t = (minimum_laxity_Lt_lower_bound + maximum_laxity_Lt_upper_bound) / 2
         while (iteration <= max_iterations
-               and (maximum_laxity_Lt_upper_bound - minimum_laxity_Lt_lower_bound) > error_tolerance):
+               and abs(maximum_laxity_Lt_upper_bound - minimum_laxity_Lt_lower_bound) > error_tolerance):
 
 
             for ev in active_evs:
@@ -285,13 +288,6 @@ for se in sampled_plugin_events:
 
 
 
-    # fig, axes = plt.subplots(5, 1, sharey=True, figsize=(6, 6))
-    #
-    # axes[0].set_ylim(0, 45)
-    # axes[0].set_yticks([0, 32])
-    # for charing_profile in charging_profiles:
-    #     ...
-
 
 
 
@@ -334,5 +330,79 @@ plt.show()
 
 
 # TODO: add test for
+# 2 cars arriving and departing at same time with same maximal charging rate
 
 plot_charging_profiles(simulations=simulations, evs=evs)
+
+
+
+timezone = pytz.timezone("America/Los_Angeles")
+start = timezone.localize(datetime(2018, 9, 5))
+end = timezone.localize(datetime(2018, 9, 6))
+period = 5  # minute
+voltage = 1e-10  # volts
+default_battery_power =  32*voltage / 1000  # kW
+site = "caltech"
+
+# -- Network -----------------------------------------------------------------------------------------------------------
+# cn = acnsim.sites.caltech_acn(basic_evse=True, voltage=voltage)
+evse_ids = ["CA-493","CA-496"]
+cn = acnsim.sites.simple_acn(evse_ids,
+                             evse_type="BASIC",
+                             voltage=208,
+                             aggregate_cap=10)
+
+# cn = acnsim.sites.caltech_acn(basic_evse=True, voltage=voltage)
+
+common_arrival_time = 10
+common_departure_time = 60
+
+# arrival,
+#         departure,
+#         requested_energy,
+#         station_id,
+#         session_id,
+#         battery,
+#         estimated_departure=None,
+
+ev1 = acnsim.EV(common_arrival_time, common_departure_time, 360, evse_ids[0], "EV-001", acnsim.Battery(100, 50, 20))
+ev2 = acnsim.EV(common_arrival_time, common_departure_time, 360, evse_ids[1], "EV-002", acnsim.Battery(100, 50, 20))
+evs = [ev1,
+       ev2]
+
+
+
+plugin_event1 = PluginEvent(
+common_arrival_time, ev1
+)
+plugin_event2 = PluginEvent(common_arrival_time, ev2)
+# events = [PluginEvent(sess.arrival, sess) for sess in evs]
+events = acnsim.EventQueue()
+events.add_events([plugin_event1, plugin_event2])
+
+sim4 = acnsim.Simulator(
+    deepcopy(cn), sch, deepcopy(events), start, period=period, verbose=True
+)
+sim4.run()
+# cn = acnsim.sites.caltech_acn(basic_evse=True, voltage=voltage)
+sim5 = acnsim.Simulator(
+    deepcopy(cn), sch3, deepcopy(events), start, period=period, verbose=True
+)
+sim5.run()
+
+num_samples = min(len(events), 10)
+# sampled_plugin_events = random.sample(events._queue, num_samples)
+
+simulations = [sim4, sim5]
+
+# sampled_plugin_events = random.sample(events._queue, num_samples)
+# evs = []
+# for se in sampled_plugin_events:
+#     evs.append(sim5.ev_history[se[1].session_id])
+
+
+
+
+plot_charging_profiles(simulations=simulations, evs=evs)
+
+
