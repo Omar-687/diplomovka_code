@@ -22,11 +22,11 @@ from typing import Callable
 
 import numpy as np
 from acnportal.acnsim.interface import SessionInfo
-from gym import spaces
+from gymnasium import spaces
 
-from ..interfaces import GymTrainedInterface
-
-
+# from ..interfaces import GymTrainedInterface
+# from interfaces import GymTrainedInterface
+from gym_acnportal.gym_acnsim.interfaces import GymTrainedInterface
 class SimObservation:
     """
     Class representing an OpenAI Gym observation of an ACN-Sim

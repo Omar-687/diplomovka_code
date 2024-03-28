@@ -26,7 +26,7 @@ import os
 import random
 from copy import deepcopy
 from datetime import datetime
-from typing import List, Callable, Optional, Dict, Any, Tuple
+from typing import List, Callable, Optional, Dict, Any
 
 import gymnasium
 import numpy as np
@@ -36,15 +36,14 @@ from acnportal.acnsim.interface import SessionInfo
 
 from acnportal.algorithms import BaseAlgorithm
 from gymnasium.wrappers import FlattenObservation
-from gym_acnportal.gym_acnsim.interfaces import GymTrainedInterface, GymTrainingInterface
+from gym_acnportal import GymTrainedInterface, GymTrainingInterface
 from matplotlib import pyplot as plt
-from numpy import ndarray
 # check migration guide https://stable-baselines3.readthedocs.io/en/master/guide/migration.html
 
 # chaging names to 3 doesnt seem to be enough
 # Renamed BaseRLModel to BaseAlgorithm (along with offpolicy and onpolicy variants)
 
-# from stable_baselines import PPO2
+# from stable_baselines3 import PPO2
 from stable_baselines3.ppo import PPO
 # from stable_baselines3.common import BaseAlgorithm as BaseRLModel
 from stable_baselines3.common.base_class import BaseAlgorithm as BaseRLModel
@@ -53,30 +52,17 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from acnportal import acnsim
 from acnportal.acnsim import events, models, Simulator, Interface
 
-
+from gym_acnportal import GymTrainedInterface, GymTrainingInterface
 from gym_acnportal.algorithms import SimRLModelWrapper, GymBaseAlgorithm
 from gym_acnportal.gym_acnsim.envs.action_spaces import SimAction
-# from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
-# from gym_acnportal.gym_acnsim.envs.custom_envs import CustomSimEnv
-
-
-from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
-from gym_acnportal.gym_acnsim.envs.custom_envs import CustomSimEnv, RebuildingEnv
-from gym_acnportal.gym_acnsim.envs.custom_envs import make_default_sim_env
-from gym_acnportal.gym_acnsim.envs.custom_envs import make_rebuilding_default_sim_env
-from gym_acnportal.gym_acnsim.envs.custom_envs import default_observation_objects
-from gym_acnportal.gym_acnsim.envs.custom_envs import default_action_object
-from gym_acnportal.gym_acnsim.envs.custom_envs import default_reward_functions
-
-# (
-#     BaseSimEnv,
-#     reward_functions,
-#     CustomSimEnv,
-#     default_action_object,
-#     default_observation_objects,
-# )
+from gym_acnportal.gym_acnsim.envs import (
+    BaseSimEnv,
+    reward_functions,
+    CustomSimEnv,
+    default_action_object,
+    default_observation_objects,
+)
 from gym_acnportal.gym_acnsim.envs.observation import SimObservation
-import gym_acnportal.gym_acnsim.envs.reward_functions as reward_functions
 from acnportal.algorithms import (
     BaseAlgorithm,
     Interface,
@@ -98,10 +84,8 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 # some functions to generate Simulation instances that simulate this
 # scenario. We'll start by defining a function which generates random
 # plugins for a single EVSE.
-
-# laxity ratio
 def random_plugin(
-    num, time_limit, evse, laxity_ratio=1/2, max_rate=32, voltage=208, period=1
+    num, time_limit, evse, laxity_ratio=1 / 2, max_rate=32, voltage=208, period=1
 ) -> List[events.Event]:
     """ Returns a list of num random plugin events occurring anytime
     from time 0 to time_limit. Each plugin has a random arrival and
@@ -239,61 +223,6 @@ def interface_generating_function(iface_type=GymTrainingInterface) -> Interface:
 # a registered gym environment that provides this functionality. To
 # make this environment, we need to input as a `kwarg` the
 # `sim_gen_func` we defined earlier.
-from gym_acnportal.gym_acnsim import *
-from gym_acnportal.gym_acnsim.envs import *
-
-# coding=utf-8
-"""
-Open AI Gym plugin for ACN-Sim. Provides several customizable
-environments for training reinforcement learning (RL) agents. See
-tutorial X for examples of usage.
-"""
-# rather use gymnasium name instead of gym to make things clear
-from typing import List, Dict
-import sys
-
-# sys.path.append('gym-acnportal/gym_acnportal/gym_acnsim')
-# print(sys.path)
-
-# from gym_acnportal.gym_acnsim.__init__ import gym
-from gymnasium.envs import registry
-from gymnasium.envs.registration import registry, register, EnvSpec
-# from envs import CustomSimEnv
-
-
-all_envs: List[EnvSpec] = list(registry.values())
-env_ids = [env_spec.id for env_spec in all_envs]
-gym_env_dict: Dict[str, str] = {
-    "custom-acnsim-v0": "gym_acnportal.gym_acnsim.envs:CustomSimEnv",
-    "default-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_default_sim_env",
-    "rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:RebuildingEnv",
-    "default-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_rebuilding_default_sim_env",
-}
-
-# gym_env_dict: Dict[str, str] = {
-#     "custom-acnsim-v0": CustomSimEnv,
-#     "default-acnsim-v0": "envs:make_default_sim_env",
-#     "rebuilding-acnsim-v0": "envs:RebuildingEnv",
-#     "default-rebuilding-acnsim-v0": "envs:make_rebuilding_default_sim_env",
-# }
-
-# registration test
-for env_name, env_entry_point in gym_env_dict.items():
-    if env_name not in env_ids:
-        register(id=env_name, entry_point=env_entry_point)
-env_name = "default-rebuilding-acnsim-v0"
-for key in gym_env_dict.keys():
-    try:
-        gymnasium.make(key)
-        print(f"The '{key}' environment exists.")
-    except gymnasium.error.UnregisteredEnv:
-        print(f"The '{key}' environment does not exist.")
-    except Exception as e:
-        # Handling other types of exceptions
-        print("Environment registered. An error occurred:", e)
-del register, registry, all_envs, gym_env_dict, List, Dict
-
-
 env = gymnasium.make(
                  "default-rebuilding-acnsim-v0",
                  interface_generating_function=interface_generating_function,
@@ -310,10 +239,9 @@ vec_env = DummyVecEnv(
         )
     ]
 )
-# num of iterations doesnt seem to help
 model = PPO("MlpPolicy", vec_env, verbose=2)
-num_iterations: int = int(1e3)
-model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e3'}.zip"
+num_iterations: int = int(1e6)
+model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e6'}.zip"
 model.learn(num_iterations)
 model.save(model_name)
 
@@ -321,11 +249,6 @@ model.save(model_name)
 # library is the same model trained for 1000000 iterations, which we
 # will now load
 model.load(model_name)
-
-from typing import List, Dict
-def process_items(items: List[str]):
-    for item in items:
-        print(item)
 #
 #
 # This is a stable_baselines PPO2 model. PPO2 requires vectorized
@@ -341,12 +264,10 @@ class StableBaselinesRLModel(SimRLModelWrapper):
         self,
         observation: object,
         reward: float,
-        terminated: bool,
-        truncated: bool,
-        # done: bool,
-        info=None,
+        done: bool,
+        info: Dict[Any, Any] = None,
         **kwargs,
-    ) -> tuple[ndarray, tuple[ndarray, ...] | None]:
+    ) -> np.ndarray:
         """ See SimRLModelWrapper.predict(). """
         return self.model.predict(observation, **kwargs)
 
@@ -377,9 +298,8 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
         self.max_recompute = max_recompute
         self._model = None
 
-    # memodict: Optional[Dict]
     def __deepcopy__(
-        self, memodict = None
+        self, memodict: Optional[Dict] = None
     ) -> "GymTrainedAlgorithmVectorized":
         return type(self)(max_recompute=self.max_recompute)
 
@@ -486,8 +406,6 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
         env.action = self.model.predict(
             self._env.env_method("observation", env.observation)[0],
             env.reward,
-            # TODO: change to terminated and truncated
-            env.done,
             env.done,
             env.info,
         )[0]
@@ -496,7 +414,7 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
 
 
 evaluation_algorithm = GymTrainedAlgorithmVectorized()
-evaluation_simulation = _random_sim_builder(evaluation_algorithm, GymTrainedInterface)
+evaluation_simulation = _random_sim_builder()
 evaluation_simulation.update_scheduler(evaluation_algorithm, GymTrainedInterface)
 edf_simulation = deepcopy(evaluation_simulation)
 rr_simulation = deepcopy(evaluation_simulation)
@@ -530,23 +448,13 @@ edf_simulation.run()
 rr_simulation.run()
 
 fig, axs = plt.subplots(3)
-fig.subplots_adjust(hspace=0.5)
-# first picture charging rates from [0]
 rl = axs[0].plot(evaluation_simulation.charging_rates[0], label="RL Agent")
-edf = axs[0].plot(edf_simulation.charging_rates[0], label="EDF")
-round_robin = axs[0].plot(rr_simulation.charging_rates[0], label="Round Robin")
-
-# charging rates from second line
+edf = axs[0].plot(rr_simulation.charging_rates[0], label="EDF")
 axs[1].plot(evaluation_simulation.charging_rates[1])
-axs[1].plot(edf_simulation.charging_rates[1])
 axs[1].plot(rr_simulation.charging_rates[1])
-
-
 axs[2].plot(acnsim.aggregate_current(evaluation_simulation))
-axs[2].plot(acnsim.aggregate_current(edf_simulation))
 axs[2].plot(acnsim.aggregate_current(rr_simulation))
 
-# labels
 axs[0].title.set_text("Current, Line 1")
 axs[1].title.set_text("Current, Line 2")
 axs[2].title.set_text("Total Current")

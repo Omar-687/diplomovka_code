@@ -9,9 +9,10 @@ from typing import Optional, Dict, List, Any, Tuple
 import gym
 import numpy as np
 
-from ..interfaces import GymTrainedInterface, GymTrainingInterface
-
-
+# from ..interfaces import GymTrainedInterface, GymTrainingInterface
+# from interfaces import GymTrainedInterface, GymTrainingInterface
+from gym_acnportal.gym_acnsim.interfaces import GymTrainedInterface, GymTrainingInterface
+# change definition of BaseSimEnv with change of gym version
 class BaseSimEnv(gym.Env):
     """ Abstract base class meant to be inherited from to implement
     new ACN-Sim Environments.
@@ -172,7 +173,7 @@ class BaseSimEnv(gym.Env):
 
     def step(
         self, action: np.ndarray
-    ) -> Tuple[np.ndarray, float, bool, Dict[Any, Any]]:
+    ) -> Tuple[np.ndarray, float, bool, bool, Dict[Any, Any]]:
         """ Step the simulation one timestep with an agent's action.
 
         Accepts an action and returns a tuple (observation, reward,
@@ -188,6 +189,7 @@ class BaseSimEnv(gym.Env):
                 environment
             reward (float) : amount of reward returned after previous
                 action
+            terminated(bool)
             done (bool): whether the episode has ended, in which case
                 further step() calls will return undefined results
             info (dict): contains auxiliary diagnostic information
@@ -208,9 +210,9 @@ class BaseSimEnv(gym.Env):
 
         self.update_state()
 
-        return self.observation, self.reward, self.done, self.info
+        return self.observation, self.reward, self.done, self.done, self.info
 
-    def reset(self) -> Dict[str, np.ndarray]:
+    def reset(self, seed=None, options=None) -> tuple[dict[str, np.array], dict]:
         """ Resets the state of the simulation and returns an initial
         observation. Resetting is done by setting the interface to the
         simulation to an interface to the simulation in its initial
@@ -223,7 +225,8 @@ class BaseSimEnv(gym.Env):
         """
         self.interface = deepcopy(self._init_snapshot)
         self._prev_interface = deepcopy(self._init_snapshot)
-        return self.observation_from_state()
+        info = {}
+        return self.observation_from_state(), info
 
     def render(self, mode="human"):
         """ Renders the environment. Implements gym.Env.render(). """

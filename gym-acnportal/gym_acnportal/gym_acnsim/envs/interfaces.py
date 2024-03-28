@@ -190,7 +190,7 @@ class GymTrainingInterface(GymTrainedInterface):
     This class of interface facilitates training by allowing an agent
     to step the Simulator by a single iteration.
     """
-    # force_feasibility: bool = True before
+    # force_feasibility: bool = False
     def step(
         self, new_schedule: Dict[str, List[float]], force_feasibility: bool = False
     ) -> Tuple[bool, bool]:
@@ -219,8 +219,6 @@ class GymTrainingInterface(GymTrainedInterface):
         """
         # Check that length of new schedules is not less than
         # max_recompute.
-        # check for examples
-        # self._simulator.max_recompute = 1
         if (
             len(new_schedule) == 0
             or self._simulator.max_recompute is None

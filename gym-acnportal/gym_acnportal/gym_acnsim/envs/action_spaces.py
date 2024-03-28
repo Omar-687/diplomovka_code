@@ -22,14 +22,14 @@ learning algorithms treat action space constraints as loose rather than
 strict.
 """
 from typing import Callable, Dict, List
-
 import numpy as np
-from gym import Space
-from gym.spaces import Box
+from gymnasium import Space
+from gymnasium.spaces import Box
 
-from ..interfaces import GymTrainedInterface
-
-
+# from ..interfaces import GymTrainedInterface
+# from interfaces import GymTrainedInterface, GymTrainingInterface
+# from gyinterfaces import GymTrainedInterface, GymTrainingInterface
+from gym_acnportal.gym_acnsim.interfaces import GymTrainedInterface, GymTrainingInterface
 class SimAction:
     """
     Class representing an OpenAI Gym action for an ACN-Sim Simulation.
