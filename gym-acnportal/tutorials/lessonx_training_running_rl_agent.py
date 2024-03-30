@@ -363,19 +363,19 @@ vec_env = DummyVecEnv(
 )
 
 
-thesis_env = DummyVecEnv(
-    [
-        lambda: FlattenObservation(
-            gymnasium.make(
-                "ev-environment",
-                interface_generating_function=interface_generating_function,
-            )
-        )
-    ]
-)
+# thesis_env = DummyVecEnv(
+#     [
+#         lambda: FlattenObservation(
+#             gymnasium.make(
+#                 "ev-environment",
+#                 interface_generating_function=interface_generating_function,
+#             )
+#         )
+#     ]
+# )
 # num of iterations doesnt seem to help
-# model = PPO("MlpPolicy", vec_env, verbose=2)
-model = SAC("MlpPolicy", vec_env, verbose=2)
+model = PPO("MlpPolicy", vec_env, verbose=2)
+# model = SAC("MlpPolicy", vec_env, verbose=2)
 num_iterations: int = int(1e3)
 model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e3'}.zip"
 model.learn(num_iterations)
@@ -572,7 +572,13 @@ rr_simulation.update_scheduler(RoundRobin(first_come_first_served))
 observation_objects: List[SimObservation] = default_observation_objects
 action_object: SimAction = default_action_object
 reward_functions: List[Callable[[BaseSimEnv], float]] = [
-    reward_functions.hard_charging_reward
+    # reward_functions.hard_charging_reward
+    reward_functions.soft_charging_reward,
+    reward_functions.current_constraint_violation,
+    reward_functions.evse_violation,
+    reward_functions.hard_charging_reward,
+    reward_functions.charging_reward
+
 ]
 eval_env: DummyVecEnv = DummyVecEnv(
     [
@@ -586,9 +592,9 @@ eval_env: DummyVecEnv = DummyVecEnv(
         )
     ]
 )
-evaluation_algorithm.register_env(eval_env)
 evaluation_algorithm.register_model(StableBaselinesRLModel(model))
 
+evaluation_algorithm.register_env(eval_env)
 evaluation_simulation.run()
 edf_simulation.run()
 rr_simulation.run()

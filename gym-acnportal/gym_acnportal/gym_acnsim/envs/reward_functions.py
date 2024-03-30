@@ -134,9 +134,15 @@ def soft_charging_reward(env: BaseSimEnv) -> float:
     """
     Rewards for charge delivered in the last timestep.
     """
-    return float(
+    a = float(
         np.sum(env.interface.charging_rates - env.prev_interface.charging_rates)
     )
+    # print(f'soft charging reward = {a}')
+
+    return a
+
+def charging_reward(env: BaseSimEnv) -> float:
+    return np.sum(env.interface.charging_rates)
 
 
 def hard_charging_reward(env: BaseSimEnv) -> float:
@@ -144,8 +150,10 @@ def hard_charging_reward(env: BaseSimEnv) -> float:
     Rewards for charge delivered in the last timestep, but only
     if constraint and evse violations are 0.
     """
-    return (
+    a = (
         soft_charging_reward(env)
         if evse_violation(env) == 0 and current_constraint_violation(env) == 0
         else 0
     )
+    # print(f'hard charging reward = {a}')
+    return a

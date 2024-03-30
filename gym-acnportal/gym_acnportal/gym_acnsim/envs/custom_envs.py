@@ -161,6 +161,11 @@ class CustomSimEnv(BaseSimEnv):
             reward (float): a reward generated from the simulation
                 state
         """
+        print('aaaaa reward')
+        print(sum(
+             np.array([reward_func(self) for reward_func in self.reward_functions])
+        ))
+        print(f'num of reward functions: {len(self.reward_functions)}')
         return sum(
             np.array([reward_func(self) for reward_func in self.reward_functions])
         )
