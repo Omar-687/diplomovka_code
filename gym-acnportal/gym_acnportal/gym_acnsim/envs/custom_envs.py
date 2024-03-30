@@ -205,7 +205,7 @@ default_reward_functions: List[Callable[[BaseSimEnv], float]] = [
     rf.soft_charging_reward,
 ]
 
-
+# first environment tested on learning
 def make_default_sim_env(
     interface: Optional[GymTrainedInterface] = None,
 ) -> CustomSimEnv:

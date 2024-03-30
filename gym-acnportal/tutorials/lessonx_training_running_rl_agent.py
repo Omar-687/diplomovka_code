@@ -28,6 +28,7 @@ from copy import deepcopy
 from datetime import datetime
 from typing import List, Callable, Optional, Dict, Any, Tuple
 
+import gym_acnportal.gym_acnsim.envs.new_environment1
 import gymnasium
 import numpy as np
 # import gym
@@ -46,6 +47,7 @@ from numpy import ndarray
 
 # from stable_baselines import PPO2
 from stable_baselines3.ppo import PPO
+from stable_baselines3.sac import SAC
 # from stable_baselines3.common import BaseAlgorithm as BaseRLModel
 from stable_baselines3.common.base_class import BaseAlgorithm as BaseRLModel
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -100,59 +102,59 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 # plugins for a single EVSE.
 
 # laxity ratio
-def random_plugin(
-    num, time_limit, evse, laxity_ratio=1/2, max_rate=32, voltage=208, period=1
-) -> List[events.Event]:
-    """ Returns a list of num random plugin events occurring anytime
-    from time 0 to time_limit. Each plugin has a random arrival and
-    departure under the time limit, and a satisfiable requested
-    energy assuming no other cars plugged in. Each EV has initial
-    laxity equal to half the staying duration unless otherwise
-    specified.
-    
-    The plugins occur for a single EVSE, whose maximal rate and
-    voltage are assumed to be 32 A and  208 V, respectively, unless
-    otherwise specified.
-
-    Args:
-        num (int): Number of random plugin
-        time_limit (int):
-        evse (str):
-        laxity_ratio (float):
-        max_rate (float):
-        voltage (float):
-        period (int):
-    """
-    out_event_lst: List[events.Event] = []
-    times = []
-    i = 0
-    while i < 2 * num:
-        random_timestep = random.randint(0, time_limit)
-        if random_timestep not in times:
-            times.append(random_timestep)
-            i += 1
-    times = sorted(times)
-    battery = models.Battery(100, 0, 100)
-    for i in range(num):
-        arrival_time = times[2 * i]
-        departure_time = times[2 * i + 1]
-        requested_energy = (
-            (departure_time - arrival_time)
-            / (60 / period)
-            * max_rate
-            * voltage
-            / (1 / laxity_ratio)
-        )
-        ev = models.EV(
-            arrival_time,
-            departure_time,
-            requested_energy,
-            evse,
-            f"rs-{evse}-{i}",
-            battery,
-        )
-        out_event_lst.append(events.PluginEvent(arrival_time, ev))
-    return out_event_lst
+# def random_plugin(
+#     num, time_limit, evse, laxity_ratio=1/2, max_rate=32, voltage=208, period=1
+# ) -> List[events.Event]:
+#     """ Returns a list of num random plugin events occurring anytime
+#     from time 0 to time_limit. Each plugin has a random arrival and
+#     departure under the time limit, and a satisfiable requested
+#     energy assuming no other cars plugged in. Each EV has initial
+#     laxity equal to half the staying duration unless otherwise
+#     specified.
+#
+#     The plugins occur for a single EVSE, whose maximal rate and
+#     voltage are assumed to be 32 A and  208 V, respectively, unless
+#     otherwise specified.
+#
+#     Args:
+#         num (int): Number of random plugin
+#         time_limit (int):
+#         evse (str):
+#         laxity_ratio (float):
+#         max_rate (float):
+#         voltage (float):
+#         period (int):
+#     """
+#     out_event_lst: List[events.Event] = []
+#     times = []
+#     i = 0
+#     while i < 2 * num:
+#         random_timestep = random.randint(0, time_limit)
+#         if random_timestep not in times:
+#             times.append(random_timestep)
+#             i += 1
+#     times = sorted(times)
+#     battery = models.Battery(100, 0, 100)
+#     for i in range(num):
+#         arrival_time = times[2 * i]
+#         departure_time = times[2 * i + 1]
+#         requested_energy = (
+#             (departure_time - arrival_time)
+#             / (60 / period)
+#             * max_rate
+#             * voltage
+#             / (1 / laxity_ratio)
+#         )
+#         ev = models.EV(
+#             arrival_time,
+#             departure_time,
+#             requested_energy,
+#             # evse,
+#             f"rs-{evse}-{i}",
+#             battery,
+#         )
+#         out_event_lst.append(events.PluginEvent(arrival_time, ev))
+#     return out_event_lst
 
 
 # Since the above event generation is stochastic, we'll want to
@@ -162,29 +164,54 @@ def random_plugin(
 def _random_sim_builder(
     algorithm: Optional[BaseAlgorithm], interface_type: type
 ) -> Simulator:
-    timezone = pytz.timezone("America/Los_Angeles")
+    # Timezone of the ACN we are using.
+    timezone = pytz.timezone('America/Los_Angeles')
+
+    # Start and End times are used when collecting data.
     start = timezone.localize(datetime(2018, 9, 5))
-    period = 1
+    end = timezone.localize(datetime(2018, 9, 6))
 
-    # Make random event queue
-    cn = acnsim.sites.simple_acn(
-        ["EVSE-001", "EVSE-002"], aggregate_cap=32 * 208 / 1000
-    )
-    event_list = []
-    for station_id in cn.station_ids:
-        event_list.extend(random_plugin(10, 100, station_id))
-    event_queue = events.EventQueue(event_list)
+    # How long each time discrete time interval in the simulation should be.
+    period = 5  # minutes
 
-    # Simulation to be wrapped
-    return acnsim.Simulator(
-        deepcopy(cn),
-        algorithm,
-        deepcopy(event_queue),
-        start,
-        period=period,
-        verbose=False,
-        interface_type=interface_type,
-    )
+    # Voltage of the network.
+    voltage = 220  # volts
+
+    # Default maximum charging rate for each EV battery.
+    default_battery_power = 32 * voltage / 1000  # kW
+
+    # Identifier of the site where data will be gathered.
+    site = 'caltech'
+
+    # For this experiment we use the predefined CaltechACN network.
+    cn = acnsim.sites.caltech_acn(basic_evse=True, voltage=voltage)
+
+    API_KEY = 'DEMO_TOKEN'
+    events = acnsim.acndata_events.generate_events(API_KEY, site, start, end, period, voltage, default_battery_power)
+    return acnsim.Simulator(cn, algorithm, events, start, period=period, verbose=False)
+    # timezone = pytz.timezone("America/Los_Angeles")
+    # start = timezone.localize(datetime(2018, 9, 5))
+    # period = 1
+    #
+    # # Make random event queue
+    # cn = acnsim.sites.simple_acn(
+    #     ["EVSE-001", "EVSE-002"], aggregate_cap=32 * 208 / 1000
+    # )
+    # event_list = []
+    # for station_id in cn.station_ids:
+    #     event_list.extend(random_plugin(10, 100, station_id))
+    # event_queue = events.EventQueue(event_list)
+    #
+    # # Simulation to be wrapped
+    # return acnsim.Simulator(
+    #     deepcopy(cn),
+    #     algorithm,
+    #     deepcopy(event_queue),
+    #     start,
+    #     period=period,
+    #     verbose=False,
+    #     interface_type=interface_type,
+    # )
 
 
 def interface_generating_function(iface_type=GymTrainingInterface) -> Interface:
@@ -248,6 +275,29 @@ Open AI Gym plugin for ACN-Sim. Provides several customizable
 environments for training reinforcement learning (RL) agents. See
 tutorial X for examples of usage.
 """
+
+import numpy as np
+from scipy import stats
+import math
+
+import gym
+from gym import error, spaces, utils
+from gym.utils import seeding
+
+# EV data management
+# import gym_EV.envs.data_collection as data_collection# Get EV Charging Data
+# import pymongo
+# import bson
+# from datetime import datetime, timedelta
+
+# RL packages
+import random  # Handling random number generation
+from random import choices
+from collections import deque  # Ordered collection with ends
+from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
+
+
+
 # rather use gymnasium name instead of gym to make things clear
 from typing import List, Dict
 import sys
@@ -268,6 +318,7 @@ gym_env_dict: Dict[str, str] = {
     "default-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_default_sim_env",
     "rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:RebuildingEnv",
     "default-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_rebuilding_default_sim_env",
+    "ev-environment": "gym_acnportal.gym_acnsim.envs.new_environment1:EVEnv"
 }
 
 # gym_env_dict: Dict[str, str] = {
@@ -310,8 +361,21 @@ vec_env = DummyVecEnv(
         )
     ]
 )
+
+
+thesis_env = DummyVecEnv(
+    [
+        lambda: FlattenObservation(
+            gymnasium.make(
+                "ev-environment",
+                interface_generating_function=interface_generating_function,
+            )
+        )
+    ]
+)
 # num of iterations doesnt seem to help
-model = PPO("MlpPolicy", vec_env, verbose=2)
+# model = PPO("MlpPolicy", vec_env, verbose=2)
+model = SAC("MlpPolicy", vec_env, verbose=2)
 num_iterations: int = int(1e3)
 model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e3'}.zip"
 model.learn(num_iterations)
@@ -379,7 +443,7 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
 
     # memodict: Optional[Dict]
     def __deepcopy__(
-        self, memodict = None
+        self, memodict: Optional[Dict] = None
     ) -> "GymTrainedAlgorithmVectorized":
         return type(self)(max_recompute=self.max_recompute)
 
@@ -497,7 +561,7 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
 
 evaluation_algorithm = GymTrainedAlgorithmVectorized()
 evaluation_simulation = _random_sim_builder(evaluation_algorithm, GymTrainedInterface)
-evaluation_simulation.update_scheduler(evaluation_algorithm, GymTrainedInterface)
+evaluation_simulation.update_scheduler(evaluation_algorithm)
 edf_simulation = deepcopy(evaluation_simulation)
 rr_simulation = deepcopy(evaluation_simulation)
 edf_simulation.update_scheduler(SortedSchedulingAlgo(earliest_deadline_first))
@@ -528,6 +592,19 @@ evaluation_algorithm.register_model(StableBaselinesRLModel(model))
 evaluation_simulation.run()
 edf_simulation.run()
 rr_simulation.run()
+
+total_energy_prop = acnsim.proportion_of_energy_delivered(evaluation_simulation)
+print("Proportion of requested energy delivered (RL alg): {0}".format(total_energy_prop))
+
+
+total_energy_prop = acnsim.proportion_of_energy_delivered(edf_simulation)
+print("Proportion of requested energy delivered (EDF): {0}".format(total_energy_prop))
+
+
+total_energy_prop = acnsim.proportion_of_energy_delivered(rr_simulation)
+print("Proportion of requested energy delivered (Round robin): {0}".format(total_energy_prop))
+
+
 
 fig, axs = plt.subplots(3)
 fig.subplots_adjust(hspace=0.5)

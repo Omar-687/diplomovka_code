@@ -118,7 +118,8 @@ def current_constraint_violation(env: BaseSimEnv) -> float:
     # Calculate violation of each individual constraint.
     difference_vector: np.ndarray = np.array(
         [
-            0 if out_vector[i] <= magnitudes[i] else out_vector[i] - magnitudes[i]
+            # changed this so it doesnt give error
+            0 if out_vector[i][0] <= magnitudes[i] else out_vector[i][0] - magnitudes[i]
             for i in range(len(out_vector))
         ]
     )

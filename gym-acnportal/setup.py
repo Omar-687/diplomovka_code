@@ -28,7 +28,7 @@ setuptools.setup(
     ],
     install_requires=[
         # unclear why this install downgrades my acnportal version
-        "acnportal @ git+https://github.com/zach401/acnportal" "@dev#egg=acnportal",
+        # "acnportal @ git+https://github.com/zach401/acnportal" "@dev#egg=acnportal",
         "gym>=0.15.4",
     ],
 )

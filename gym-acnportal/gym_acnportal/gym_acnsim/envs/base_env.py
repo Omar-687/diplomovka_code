@@ -72,6 +72,7 @@ class BaseSimEnv(gym.Env):
         self._schedule = {}
         self._observation = None
         self._reward = None
+        # TODO: replace None with terminated and truncated
         self._done = None
         self._info = None
 
