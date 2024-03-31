@@ -4,22 +4,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime, timedelta
 
+from acnportal.acnsim.simulator import Simulator
 
 
-
-def plot_charging_profiles(simulations, evs, period=5):
+def plot_charging_profiles(simulations:list[Simulator], evs, period=5):
     for simulation in simulations:
         fig1, axs1 = plt.subplots(len(evs), figsize=(10, len(evs) * 3), sharey=True)
         for plot_idx, ev in enumerate(evs, start=0):
             evse_index = simulation.network.station_ids.index(ev.station_id)
             session_len = ev.departure - ev.arrival
             x = [simulation.start + timedelta(minutes=period * ev.arrival) + timedelta(minutes=period * i) for i in range(session_len)]
-            charging_profile = simulation.charging_rates[evse_index][ev.arrival:ev.departure]
+            # charging_profile = simulation.charging_rates[evse_index][ev.arrival:ev.departure]
+            # TODO: if there are more voltages simulation.network._voltages[evse_index], check if * is right operation
+
+            charging_profile = (simulation.charging_rates[evse_index][ev.arrival:ev.departure] * simulation.network._voltages[evse_index] ) / (1000)
+            charging_profile = charging_profile * (simulation.period/60)
             axs1[plot_idx].plot(x, charging_profile)
             plt.xlabel('Time [K]')
-
-            plt.yticks([0, 16, 32])
-            plt.ylabel('Pilot signal sent by evse [A]')
+            # simulation.it
+            # plt.yticks([0, 16, 32])
+            plt.ylabel('Energy [kWh]')
         plt.show()
     # Some example data to display
     # x = np.linspace(0, 2 * np.pi, 400)

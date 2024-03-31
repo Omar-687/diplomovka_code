@@ -144,7 +144,30 @@ def soft_charging_reward(env: BaseSimEnv) -> float:
 def charging_reward(env: BaseSimEnv) -> float:
     return np.sum(env.interface.charging_rates)
 
+def ev_example_reward(env: BaseSimEnv):
+    env.penalty = 0
+    for i in np.nonzero(env.state[:, 2])[0]:
+        # The EV has no remaining time
+        if env.state[i, 0] == 0:
+            # The EV is overdue
+            if env.state[i, 1] > 0:
+                env.penalty = 10 * env.gamma * env.state[i, 1]
+            # Deactivate the EV and reset
+            env.state[i, :] = 0
 
+        # Use soft penalty
+        # else:
+        #   penalty = self.gamma * self.state[0, 1] / self.state[i, 0]
+
+    # Update rewards
+    # Set entropy zero if feedback is allzero
+    if not np.any(env.action[-env.n_levels:]):
+        env.flexibility = 0
+    else:
+        env.flexibility = env.alpha * (stats.entropy(env.action[-env.n_levels:])) ** 2
+
+    env.tracking_error = env.beta * (np.sum(env.action[:env.n_EVs]) - env.signal) ** 2
+    reward = (env.flexibility - env.tracking_error - env.penalty) / 100
 def hard_charging_reward(env: BaseSimEnv) -> float:
     """
     Rewards for charge delivered in the last timestep, but only

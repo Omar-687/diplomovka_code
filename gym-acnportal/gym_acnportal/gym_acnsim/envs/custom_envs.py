@@ -138,6 +138,7 @@ class CustomSimEnv(BaseSimEnv):
             schedule (Dict[str, List[float]]): Dictionary mapping
                 station ids to a schedule of pilot signals.
         """
+        print('get schedule')
         return self.action_object.get_schedule(self.interface, self.action)
 
     def observation_from_state(self) -> Dict[str, np.ndarray]:
@@ -149,6 +150,7 @@ class CustomSimEnv(BaseSimEnv):
             observation (Dict[str, np.ndarray]): An environment
                 observation generated from the simulation state
         """
+        print('get observation')
         return {
             observation_object.name: observation_object.get_obs(self.interface)
             for observation_object in self.observation_objects
@@ -206,6 +208,7 @@ default_observation_objects: List[SimObservation] = [
 default_action_object: SimAction = zero_centered_single_charging_schedule()
 default_reward_functions: List[Callable[[BaseSimEnv], float]] = [
     rf.evse_violation,
+    rf.unplugged_ev_violation,
     rf.current_constraint_violation,
     rf.soft_charging_reward,
 ]

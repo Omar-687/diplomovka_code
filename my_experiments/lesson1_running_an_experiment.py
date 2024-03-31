@@ -86,3 +86,13 @@ plt.xlabel("Time (periods)")
 plt.ylabel("Current (A)")
 plt.title("Total Aggregate Current")
 plt.show()
+
+
+agg_power = acnsim.aggregate_energy(sim)
+plt.plot(agg_power)
+plt.xlabel("Time (periods)")
+plt.ylabel("Energy (kWh)")
+plt.title("Energy supplied to EVs over time")
+plt.show()
+
+

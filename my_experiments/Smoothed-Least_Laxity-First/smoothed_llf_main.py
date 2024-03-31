@@ -305,17 +305,30 @@ formatter = mdates.ConciseDateFormatter(locator)
 
 # TODO change ncol to num of simulations
 fig, axs = plt.subplots(1, 3, sharey=True, sharex=True)
-axs[0].plot(sim_dates, acnsim.aggregate_current(sim), label="Our sLLF")
-axs[1].plot(sim2_dates, acnsim.aggregate_current(sim2), label="Their EDF")
-axs[2].plot(sim3_dates, acnsim.aggregate_current(sim2), label="Their LLF")
+# axs[0].plot(sim_dates, acnsim.aggregate_current(sim), label="Our sLLF")
+# axs[1].plot(sim2_dates, acnsim.aggregate_current(sim2), label="Their EDF")
+# axs[2].plot(sim3_dates, acnsim.aggregate_current(sim2), label="Their LLF")
+
+# TODO: check in what units maximum charging rate of ev is
+# change it for another experiment
+# axs[0].plot(sim_dates, acnsim.aggregate_power(sim), label="Our sLLF")
+# axs[1].plot(sim2_dates, acnsim.aggregate_power(sim2), label="Their EDF")
+# axs[2].plot(sim3_dates, acnsim.aggregate_power(sim2), label="Their LLF")
+
+axs[0].plot(sim_dates, acnsim.aggregate_energy(sim), label="Our sLLF")
+axs[1].plot(sim2_dates, acnsim.aggregate_energy(sim2), label="Their EDF")
+axs[2].plot(sim3_dates, acnsim.aggregate_energy(sim2), label="Their LLF")
+
 
 axs[0].set_title("Our sLLF")
 axs[1].set_title("Their EDF")
 axs[2].set_title("Their LLF")
 
-
+# unit of energy is kWh
 for ax in axs:
-    ax.set_ylabel("Current (A)")
+    # ax.set_ylabel("Current (A)")
+    # ax.set_ylabel("Power  (kW)")
+    ax.set_ylabel("Energy (kWh)")
     for label in ax.get_xticklabels():
         label.set_rotation(40)
     ax.xaxis.set_major_locator(locator)
@@ -345,6 +358,8 @@ evse_ids = ["CA-493","CA-496"]
 cn = acnsim.sites.simple_acn(evse_ids,
                              evse_type="BASIC",
                              voltage=208,
+                             # voltage=1,
+                             # in kW
                              aggregate_cap=10)
 
 # cn = acnsim.sites.caltech_acn(basic_evse=True, voltage=voltage)
@@ -360,12 +375,12 @@ common_departure_time = 60
 #         battery,
 #         estimated_departure=None,
 
-ev1 = acnsim.EV(common_arrival_time, common_departure_time, 360, evse_ids[0], "EV-001", acnsim.Battery(100, 50, 20))
-ev2 = acnsim.EV(common_arrival_time, common_departure_time, 360, evse_ids[1], "EV-002", acnsim.Battery(100, 50, 20))
+ev1 = acnsim.EV(common_arrival_time, common_departure_time, 360, evse_ids[0], "EV-001", acnsim.Battery(100, 50, 5))
+ev2 = acnsim.EV(common_arrival_time, common_departure_time, 360, evse_ids[1], "EV-002", acnsim.Battery(100, 50, 4))
 evs = [ev1,
        ev2]
 
-
+# charging rate will be slower than maximal charging rate, because evse max charging rate is smaller
 
 plugin_event1 = PluginEvent(
 common_arrival_time, ev1

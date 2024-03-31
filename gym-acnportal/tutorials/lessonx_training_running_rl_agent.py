@@ -320,7 +320,7 @@ gym_env_dict: Dict[str, str] = {
     "default-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_rebuilding_default_sim_env",
     "ev-environment": "gym_acnportal.gym_acnsim.envs.new_environment1:EVEnv"
 }
-
+# default-rebuilding-acnsim
 # gym_env_dict: Dict[str, str] = {
 #     "custom-acnsim-v0": CustomSimEnv,
 #     "default-acnsim-v0": "envs:make_default_sim_env",
@@ -363,16 +363,16 @@ vec_env = DummyVecEnv(
 )
 
 
-# thesis_env = DummyVecEnv(
-#     [
-#         lambda: FlattenObservation(
-#             gymnasium.make(
-#                 "ev-environment",
-#                 interface_generating_function=interface_generating_function,
-#             )
-#         )
-#     ]
-# )
+thesis_env = DummyVecEnv(
+    [
+        lambda: FlattenObservation(
+            gymnasium.make(
+                "ev-environment",
+                interface_generating_function=interface_generating_function,
+            )
+        )
+    ]
+)
 # num of iterations doesnt seem to help
 model = PPO("MlpPolicy", vec_env, verbose=2)
 # model = SAC("MlpPolicy", vec_env, verbose=2)
