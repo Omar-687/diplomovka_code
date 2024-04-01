@@ -28,7 +28,7 @@ from copy import deepcopy
 from datetime import datetime
 from typing import List, Callable, Optional, Dict, Any, Tuple
 
-import gym_acnportal.gym_acnsim.envs.new_environment1
+# import gym_acnportal.gym_acnsim.envs.new_environment1
 import gymnasium
 import numpy as np
 # import gym
@@ -51,7 +51,7 @@ from stable_baselines3.sac import SAC
 # from stable_baselines3.common import BaseAlgorithm as BaseRLModel
 from stable_baselines3.common.base_class import BaseAlgorithm as BaseRLModel
 from stable_baselines3.common.vec_env import DummyVecEnv
-
+# from gym_acnportal.gym_acnsim.envs.new_environment1 import EVEnv
 from acnportal import acnsim
 from acnportal.acnsim import events, models, Simulator, Interface
 
@@ -167,10 +167,15 @@ def _random_sim_builder(
     # Timezone of the ACN we are using.
     timezone = pytz.timezone('America/Los_Angeles')
 
-    # Start and End times are used when collecting data.
-    start = timezone.localize(datetime(2018, 9, 5))
-    end = timezone.localize(datetime(2018, 9, 6))
 
+
+    start_day = 1
+    end_day = 27
+    random_start = random.randint(start_day, end_day)
+
+    # Start and End times are used when collecting data.
+    start = timezone.localize(datetime(2018, 9, random_start))
+    end = timezone.localize(datetime(2018, 9, random_start + 1))
     # How long each time discrete time interval in the simulation should be.
     period = 5  # minutes
 
@@ -316,9 +321,11 @@ env_ids = [env_spec.id for env_spec in all_envs]
 gym_env_dict: Dict[str, str] = {
     "custom-acnsim-v0": "gym_acnportal.gym_acnsim.envs:CustomSimEnv",
     "default-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_default_sim_env",
+    "ev-acnsim-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:make_ev_sim_env",
     "rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:RebuildingEnv",
     "default-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_rebuilding_default_sim_env",
-    "ev-environment": "gym_acnportal.gym_acnsim.envs.new_environment1:EVEnv"
+    "ev-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:make_rebuilding_ev_sim_env",
+    "ev-environment-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:EVEnv"
 }
 # default-rebuilding-acnsim
 # gym_env_dict: Dict[str, str] = {
@@ -341,14 +348,14 @@ for key in gym_env_dict.keys():
         print(f"The '{key}' environment does not exist.")
     except Exception as e:
         # Handling other types of exceptions
-        print("Environment registered. An error occurred:", e)
+        print(f'Environment {key} registered. An error occurred: {e}')
 del register, registry, all_envs, gym_env_dict, List, Dict
 
 
-env = gymnasium.make(
-                 "default-rebuilding-acnsim-v0",
-                 interface_generating_function=interface_generating_function,
-             )
+# env = gymnasium.make(
+#                  "default-rebuilding-acnsim-v0",
+#                  interface_generating_function=interface_generating_function,
+#              )
 
 
 vec_env = DummyVecEnv(
@@ -366,16 +373,25 @@ vec_env = DummyVecEnv(
 thesis_env = DummyVecEnv(
     [
         lambda: FlattenObservation(
-            gymnasium.make(
-                "ev-environment",
+            gymnasium.make("ev-rebuilding-acnsim-v0",
                 interface_generating_function=interface_generating_function,
             )
         )
     ]
 )
 # num of iterations doesnt seem to help
+
+
+
 model = PPO("MlpPolicy", vec_env, verbose=2)
-# model = SAC("MlpPolicy", vec_env, verbose=2)
+# model = SAC(policy="MlpPolicy",
+#             env=thesis_env,
+#             verbose=2,
+#             # learning_rate=3e-4,
+#             # batch_size=256,
+#             # buffer_size=10**6
+#             )
+# model = SAC("MlpPolicy", thesis_env, verbose=2)
 num_iterations: int = int(1e3)
 model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e3'}.zip"
 model.learn(num_iterations)

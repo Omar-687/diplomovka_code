@@ -1,33 +1,57 @@
-from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
-from gymnasium import spaces
-import numpy as np
-from scipy import stats
+
+
 from copy import deepcopy
-from typing import Optional, Dict, List, Any, Tuple
-from gym_acnportal.gym_acnsim.interfaces import GymTrainedInterface, GymTrainingInterface
+from typing import Optional, Dict, List, Callable, Any
+
+import numpy as np
+from gymnasium import spaces
+
 from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
 import gym_acnportal.gym_acnsim.envs.observation  as obs
 import gym_acnportal.gym_acnsim.envs.reward_functions  as rf
-
+from gym_acnportal.gym_acnsim.envs.custom_envs import RebuildingEnv
 # import gym_acnportal.gym_acnsim.envs.observation as obs, reward_functions as rf
 # from gym_acnportal.gym_acnsim.envs.reward_functions import B
-from gym_acnportal.gym_acnsim.envs.action_spaces import SimAction, zero_centered_single_charging_schedule
+from gym_acnportal.gym_acnsim.envs.action_spaces import SimAction, full_charging_schedule, zero_centered_single_charging_schedule
 from gym_acnportal.gym_acnsim.envs.observation import SimObservation
 from gym_acnportal.gym_acnsim.envs.interfaces import GymTrainedInterface
-from typing import List, Callable, Optional, Dict, Any
 
 
-# RL packages
-import random  # Handling random number generation
-from random import choices
-# TODO: check what i need to inherit to run my own environment
+
+#
+#
+#
+# # Default observation objects, action object, and reward functions list
+# # for use with make_default_sim_env and make_rebuilding_default_sim_env.
+default_observation_objects: List[SimObservation] = [
+    obs.arrival_observation(),
+    obs.departure_observation(),
+    obs.remaining_demand_observation(),
+    obs.constraint_matrix_observation(),
+    obs.magnitudes_observation(),
+    obs.phases_observation(),
+    obs.timestep_observation(),
+]
+# default_action_object: SimAction = zero_centered_single_charging_schedule()
+# default_action_object: SimAction = centered_single_charging_schedule()
+default_action_object: SimAction = full_charging_schedule()
+default_reward_functions: List[Callable[[BaseSimEnv], float]] = [
+    rf.evse_violation,
+    rf.unplugged_ev_violation,
+    rf.current_constraint_violation,
+    rf.soft_charging_reward,
+]
+#
+#
+# # TODO: check what i need to inherit to run my own environment
+# # TODO: change tab settings, tab should be equal to 3 spaces
 class EVEnv(BaseSimEnv):
-  observation_objects: List[SimObservation]
-  observation_space: spaces.Dict
-  action_object: SimAction
-  action_space: spaces.Space
-  reward_functions: List[Callable[[BaseSimEnv], float]]
-  def __init__(self,
+    observation_objects: List[SimObservation]
+    observation_space: spaces.Dict
+    action_object: SimAction
+    action_space: spaces.Space
+    reward_functions: List[Callable[[BaseSimEnv], float]]
+    def __init__(self,
                interface: Optional[GymTrainedInterface],
                observation_objects: List[SimObservation],
                action_object: SimAction,
@@ -36,34 +60,34 @@ class EVEnv(BaseSimEnv):
                n_levels=10,
                max_capacity=20):
     # Parameter for reward function
-    super().__init__(interface)
-    self.alpha = 0
-    self.beta = 5
-    self.gamma = 1
-    self.signal = None
-    self.state = None
-    self.n_EVs = n_EVs
-    self.n_levels = n_levels
-    self._max_episode_steps = 100000
-    self.flexibility = 0
-    self.penalty = 0
-    self.tracking_error = 0
-    self.max_capacity = max_capacity
-    self.max_rate = 6
+        super().__init__(interface)
+        self.alpha = 0
+        self.beta = 5
+        self.gamma = 1
+        self.signal = None
+        self.state = None
+        self.n_EVs = n_EVs
+        self.n_levels = n_levels
+        self._max_episode_steps = 100000
+        self.flexibility = 0
+        self.penalty = 0
+        self.tracking_error = 0
+        self.max_capacity = max_capacity
+        self.max_rate = 6
 
 
 
-    self.observation_objects = observation_objects
-    self.action_object = action_object
-    self.reward_functions = reward_functions
-    if interface is None:
-      return
-    self.observation_space = spaces.Dict(
-      {
-        observation_object.name: observation_object.get_space(self.interface)
-        for observation_object in observation_objects
-      }
-    )
+        self.observation_objects = observation_objects
+        self.action_object = action_object
+        self.reward_functions = reward_functions
+        if interface is None:
+          return
+        self.observation_space = spaces.Dict(
+          {
+            observation_object.name: observation_object.get_space(self.interface)
+            for observation_object in observation_objects
+          }
+        )
 
     # self.action_space = action_object.get_space(interface)
     # # Specify the observation space
@@ -83,22 +107,22 @@ class EVEnv(BaseSimEnv):
     # self.time = 0
     # self.time_interval = 0.1
     # store data
-    self.data = None
+    # self.data = None
 
-  def action_to_schedule(self):
-    return self.action_object.get_schedule(self.interface, self.action)
-  def observation_from_state(self):
-    return {
+    def action_to_schedule(self):
+        return self.action_object.get_schedule(self.interface, self.action)
+    def observation_from_state(self):
+        return {
       observation_object.name: observation_object.get_obs(self.interface)
       for observation_object in self.observation_objects
     }
 
-  def reward_from_state(self):
-    return sum(
+    def reward_from_state(self):
+        return sum(
       np.array([reward_func(self) for reward_func in self.reward_functions])
     )
-  def done_from_state(self):
-    return self.interface.is_done
+    def done_from_state(self):
+        return self.interface.is_done
 
 
 
@@ -198,4 +222,25 @@ class EVEnv(BaseSimEnv):
   #
   #   obs = np.append(self.state[:, 0:2].flatten(), self.signal)
   #   return obs
+def make_ev_sim_env(
+            interface: Optional[GymTrainedInterface] = None,
+    ):
+      return EVEnv(interface=interface,
+                   observation_objects=default_observation_objects,
+                   action_object=default_action_object,
+                   reward_functions=default_reward_functions)
 
+def make_rebuilding_ev_sim_env(
+          interface_generating_function: Optional[Callable[[], GymTrainedInterface]]
+  ) -> RebuildingEnv:
+    """ A simulator environment with the same characteristics as the
+    environment returned by make_default_sim_env except on every reset,
+    the simulation is completely rebuilt using interface_generating_function.
+
+    See make_default_sim_env for more info.
+    """
+    interface = interface_generating_function()
+    return RebuildingEnv.from_custom_sim_env(
+      make_ev_sim_env(interface),
+      interface_generating_function=interface_generating_function,
+    )
