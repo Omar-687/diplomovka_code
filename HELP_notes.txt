@@ -1,1 +1,8 @@
 gym acnportal needs to be imported from dev branch
+each package needs to be installed to easily use imports (navigate to package root directory and use terminal command pip install .)
+installed packages can be shown in python console by pip show <package>
+
+
+ImportError: Missing shimmy installation. You provided an OpenAI Gym environment. Stable-Baselines3 (SB3) has transitioned to using Gymnasium internally. In order to use OpenAI Gym environments with SB3, you need to install shimmy (`pip install 'shimmy>=0.2.1'`).
+
+possibly each change in any package -> we should reinstall

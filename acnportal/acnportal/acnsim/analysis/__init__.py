@@ -1,9 +1,9 @@
 import numpy as np
 import warnings
 import datetime
+from acnportal.acnsim.simulator import Simulator
 
-
-def aggregate_current(sim):
+def aggregate_current(sim:Simulator):
     """ Calculate the time series of aggregate current of all EVSEs within a simulation.
 
     Args:
@@ -15,7 +15,7 @@ def aggregate_current(sim):
     return sim.charging_rates.sum(axis=0)
 
 
-def aggregate_power(sim):
+def aggregate_power(sim:Simulator):
     """ Calculate the time series of aggregate power of all EVSEs within a simulation.
 
     Args:
@@ -25,6 +25,19 @@ def aggregate_power(sim):
         np.Array: A numpy ndarray of the aggregate power at each time. [kW]
     """
     return sim.network._voltages.T.dot(sim.charging_rates) / 1000
+
+def aggregate_energy(sim:Simulator):
+    """ Calculate the time series of aggregate power of all EVSEs within a simulation.
+
+    Args:
+        sim (Simulator): A Simulator object which has been run.
+
+    Returns:
+        np.Array: A numpy ndarray of the aggregate power at each time. [kW]
+    """
+    return aggregate_power(sim) * (sim.period / 60)
+def energies_delivered(sim:Simulator):
+    return sim.charging_rates
 
 
 def constraint_currents(sim, return_magnitudes=False, constraint_ids=None):

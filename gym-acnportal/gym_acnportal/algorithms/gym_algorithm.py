@@ -34,12 +34,14 @@ class SimRLModelWrapper:
             model (object): The wrapped RL model.
         """
         self.model = model
-
+    # change input paramters, check gym->gymnasium migration guide
     def predict(
         self,
         observation: object,
         reward: float,
-        done: bool,
+        # done: bool,
+        terminated:bool,
+        truncated:bool,
         info: Dict[Any, Any] = None,
     ) -> np.ndarray:
         """

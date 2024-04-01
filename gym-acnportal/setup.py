@@ -27,7 +27,8 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        "acnportal @ git+https://github.com/zach401/acnportal" "@dev#egg=acnportal",
+        # unclear why this install downgrades my acnportal version
+        # "acnportal @ git+https://github.com/zach401/acnportal" "@dev#egg=acnportal",
         "gym>=0.15.4",
     ],
 )

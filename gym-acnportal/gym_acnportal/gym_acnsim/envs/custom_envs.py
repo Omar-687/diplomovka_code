@@ -7,14 +7,34 @@ from copy import deepcopy
 from typing import Optional, Dict, List, Callable, Any
 
 import numpy as np
-from gym import spaces
+from gymnasium import spaces
 
-from .base_env import BaseSimEnv
-from . import observation as obs, reward_functions as rf
-from .action_spaces import SimAction, zero_centered_single_charging_schedule
-from .observation import SimObservation
-from ..interfaces import GymTrainedInterface
+# from .base_env import BaseSimEnv
+# from . import observation as obs, reward_functions as rf
+# from .action_spaces import SimAction, zero_centered_single_charging_schedule
+# from .observation import SimObservation
+# from ..interfaces import GymTrainedInterface
 
+
+# from base_env import BaseSimEnv
+# import observation as obs, reward_functions as rf
+# from action_spaces import SimAction, zero_centered_single_charging_schedule
+# from observation import SimObservation
+# from interfaces import GymTrainedInterface
+
+from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
+import gym_acnportal.gym_acnsim.envs.observation  as obs
+import gym_acnportal.gym_acnsim.envs.reward_functions  as rf
+
+# import gym_acnportal.gym_acnsim.envs.observation as obs, reward_functions as rf
+# from gym_acnportal.gym_acnsim.envs.reward_functions import B
+from gym_acnportal.gym_acnsim.envs.action_spaces import SimAction, zero_centered_single_charging_schedule
+from gym_acnportal.gym_acnsim.envs.observation import SimObservation
+from gym_acnportal.gym_acnsim.envs.interfaces import GymTrainedInterface
+
+
+
+# from interfaces import GymTrainedInterface
 
 class CustomSimEnv(BaseSimEnv):
     """ A simulator environment with customizable observations, action
@@ -118,6 +138,7 @@ class CustomSimEnv(BaseSimEnv):
             schedule (Dict[str, List[float]]): Dictionary mapping
                 station ids to a schedule of pilot signals.
         """
+        print('get schedule')
         return self.action_object.get_schedule(self.interface, self.action)
 
     def observation_from_state(self) -> Dict[str, np.ndarray]:
@@ -129,6 +150,7 @@ class CustomSimEnv(BaseSimEnv):
             observation (Dict[str, np.ndarray]): An environment
                 observation generated from the simulation state
         """
+        print('get observation')
         return {
             observation_object.name: observation_object.get_obs(self.interface)
             for observation_object in self.observation_objects
@@ -141,6 +163,11 @@ class CustomSimEnv(BaseSimEnv):
             reward (float): a reward generated from the simulation
                 state
         """
+        print('aaaaa reward')
+        print(sum(
+             np.array([reward_func(self) for reward_func in self.reward_functions])
+        ))
+        print(f'num of reward functions: {len(self.reward_functions)}')
         return sum(
             np.array([reward_func(self) for reward_func in self.reward_functions])
         )
@@ -181,11 +208,12 @@ default_observation_objects: List[SimObservation] = [
 default_action_object: SimAction = zero_centered_single_charging_schedule()
 default_reward_functions: List[Callable[[BaseSimEnv], float]] = [
     rf.evse_violation,
+    rf.unplugged_ev_violation,
     rf.current_constraint_violation,
     rf.soft_charging_reward,
 ]
 
-
+# first environment tested on learning
 def make_default_sim_env(
     interface: Optional[GymTrainedInterface] = None,
 ) -> CustomSimEnv:
@@ -311,8 +339,8 @@ class RebuildingEnv(CustomSimEnv):
             env.reward_functions,
             interface_generating_function=interface_generating_function,
         )
-
-    def reset(self) -> Dict[str, np.ndarray]:
+    # had to change reset input and output with transition to gym to gymnasium (read migration guide)
+    def reset(self, seed=None, options=None) -> tuple[dict[str, np.array], dict]:
         """ Resets the state of the simulation and returns an initial 
         observation. Resetting is done by setting the interface to 
         the simulation to an interface to the simulation in its 
@@ -325,7 +353,8 @@ class RebuildingEnv(CustomSimEnv):
         self.interface = deepcopy(temp_interface)
         self._prev_interface = deepcopy(temp_interface)
         self._init_snapshot = deepcopy(temp_interface)
-        return self.observation_from_state()
+        info = {}
+        return self.observation_from_state(), info
 
     def render(self, mode="human"):
         """ Renders the environment. Implements gym.Env.render(). """

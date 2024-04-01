@@ -26,34 +26,59 @@ import os
 import random
 from copy import deepcopy
 from datetime import datetime
-from typing import List, Callable, Optional, Dict, Any
+from typing import List, Callable, Optional, Dict, Any, Tuple
+
+# import gym_acnportal.gym_acnsim.envs.new_environment1
+import gymnasium
 import numpy as np
-import gym
+# import gym
 import pytz
 from acnportal.acnsim.interface import SessionInfo
 
 from acnportal.algorithms import BaseAlgorithm
-from gym.wrappers import FlattenObservation
-from gym_acnportal import GymTrainedInterface, GymTrainingInterface
+from gymnasium.wrappers import FlattenObservation
+from gym_acnportal.gym_acnsim.interfaces import GymTrainedInterface, GymTrainingInterface
 from matplotlib import pyplot as plt
-from stable_baselines import PPO2
-from stable_baselines.common import BaseRLModel
-from stable_baselines.common.vec_env import DummyVecEnv
+from numpy import ndarray
+# check migration guide https://stable-baselines3.readthedocs.io/en/master/guide/migration.html
 
+# chaging names to 3 doesnt seem to be enough
+# Renamed BaseRLModel to BaseAlgorithm (along with offpolicy and onpolicy variants)
+
+# from stable_baselines import PPO2
+from stable_baselines3.ppo import PPO
+from stable_baselines3.sac import SAC
+# from stable_baselines3.common import BaseAlgorithm as BaseRLModel
+from stable_baselines3.common.base_class import BaseAlgorithm as BaseRLModel
+from stable_baselines3.common.vec_env import DummyVecEnv
+# from gym_acnportal.gym_acnsim.envs.new_environment1 import EVEnv
 from acnportal import acnsim
 from acnportal.acnsim import events, models, Simulator, Interface
 
-from gym_acnportal import GymTrainedInterface, GymTrainingInterface
+
 from gym_acnportal.algorithms import SimRLModelWrapper, GymBaseAlgorithm
 from gym_acnportal.gym_acnsim.envs.action_spaces import SimAction
-from gym_acnportal.gym_acnsim.envs import (
-    BaseSimEnv,
-    reward_functions,
-    CustomSimEnv,
-    default_action_object,
-    default_observation_objects,
-)
+# from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
+# from gym_acnportal.gym_acnsim.envs.custom_envs import CustomSimEnv
+
+
+from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
+from gym_acnportal.gym_acnsim.envs.custom_envs import CustomSimEnv, RebuildingEnv
+from gym_acnportal.gym_acnsim.envs.custom_envs import make_default_sim_env
+from gym_acnportal.gym_acnsim.envs.custom_envs import make_rebuilding_default_sim_env
+from gym_acnportal.gym_acnsim.envs.custom_envs import default_observation_objects
+from gym_acnportal.gym_acnsim.envs.custom_envs import default_action_object
+from gym_acnportal.gym_acnsim.envs.custom_envs import default_reward_functions
+
+# (
+#     BaseSimEnv,
+#     reward_functions,
+#     CustomSimEnv,
+#     default_action_object,
+#     default_observation_objects,
+# )
 from gym_acnportal.gym_acnsim.envs.observation import SimObservation
+import gym_acnportal.gym_acnsim.envs.reward_functions as reward_functions
 from acnportal.algorithms import (
     BaseAlgorithm,
     Interface,
@@ -75,59 +100,61 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 # some functions to generate Simulation instances that simulate this
 # scenario. We'll start by defining a function which generates random
 # plugins for a single EVSE.
-def random_plugin(
-    num, time_limit, evse, laxity_ratio=1 / 2, max_rate=32, voltage=208, period=1
-) -> List[events.Event]:
-    """ Returns a list of num random plugin events occurring anytime
-    from time 0 to time_limit. Each plugin has a random arrival and
-    departure under the time limit, and a satisfiable requested
-    energy assuming no other cars plugged in. Each EV has initial
-    laxity equal to half the staying duration unless otherwise
-    specified.
-    
-    The plugins occur for a single EVSE, whose maximal rate and
-    voltage are assumed to be 32 A and  208 V, respectively, unless
-    otherwise specified.
 
-    Args:
-        num (int): Number of random plugin
-        time_limit (int):
-        evse (str):
-        laxity_ratio (float):
-        max_rate (float):
-        voltage (float):
-        period (int):
-    """
-    out_event_lst: List[events.Event] = []
-    times = []
-    i = 0
-    while i < 2 * num:
-        random_timestep = random.randint(0, time_limit)
-        if random_timestep not in times:
-            times.append(random_timestep)
-            i += 1
-    times = sorted(times)
-    battery = models.Battery(100, 0, 100)
-    for i in range(num):
-        arrival_time = times[2 * i]
-        departure_time = times[2 * i + 1]
-        requested_energy = (
-            (departure_time - arrival_time)
-            / (60 / period)
-            * max_rate
-            * voltage
-            / (1 / laxity_ratio)
-        )
-        ev = models.EV(
-            arrival_time,
-            departure_time,
-            requested_energy,
-            evse,
-            f"rs-{evse}-{i}",
-            battery,
-        )
-        out_event_lst.append(events.PluginEvent(arrival_time, ev))
-    return out_event_lst
+# laxity ratio
+# def random_plugin(
+#     num, time_limit, evse, laxity_ratio=1/2, max_rate=32, voltage=208, period=1
+# ) -> List[events.Event]:
+#     """ Returns a list of num random plugin events occurring anytime
+#     from time 0 to time_limit. Each plugin has a random arrival and
+#     departure under the time limit, and a satisfiable requested
+#     energy assuming no other cars plugged in. Each EV has initial
+#     laxity equal to half the staying duration unless otherwise
+#     specified.
+#
+#     The plugins occur for a single EVSE, whose maximal rate and
+#     voltage are assumed to be 32 A and  208 V, respectively, unless
+#     otherwise specified.
+#
+#     Args:
+#         num (int): Number of random plugin
+#         time_limit (int):
+#         evse (str):
+#         laxity_ratio (float):
+#         max_rate (float):
+#         voltage (float):
+#         period (int):
+#     """
+#     out_event_lst: List[events.Event] = []
+#     times = []
+#     i = 0
+#     while i < 2 * num:
+#         random_timestep = random.randint(0, time_limit)
+#         if random_timestep not in times:
+#             times.append(random_timestep)
+#             i += 1
+#     times = sorted(times)
+#     battery = models.Battery(100, 0, 100)
+#     for i in range(num):
+#         arrival_time = times[2 * i]
+#         departure_time = times[2 * i + 1]
+#         requested_energy = (
+#             (departure_time - arrival_time)
+#             / (60 / period)
+#             * max_rate
+#             * voltage
+#             / (1 / laxity_ratio)
+#         )
+#         ev = models.EV(
+#             arrival_time,
+#             departure_time,
+#             requested_energy,
+#             # evse,
+#             f"rs-{evse}-{i}",
+#             battery,
+#         )
+#         out_event_lst.append(events.PluginEvent(arrival_time, ev))
+#     return out_event_lst
 
 
 # Since the above event generation is stochastic, we'll want to
@@ -137,29 +164,59 @@ def random_plugin(
 def _random_sim_builder(
     algorithm: Optional[BaseAlgorithm], interface_type: type
 ) -> Simulator:
-    timezone = pytz.timezone("America/Los_Angeles")
-    start = timezone.localize(datetime(2018, 9, 5))
-    period = 1
+    # Timezone of the ACN we are using.
+    timezone = pytz.timezone('America/Los_Angeles')
 
-    # Make random event queue
-    cn = acnsim.sites.simple_acn(
-        ["EVSE-001", "EVSE-002"], aggregate_cap=32 * 208 / 1000
-    )
-    event_list = []
-    for station_id in cn.station_ids:
-        event_list.extend(random_plugin(10, 100, station_id))
-    event_queue = events.EventQueue(event_list)
 
-    # Simulation to be wrapped
-    return acnsim.Simulator(
-        deepcopy(cn),
-        algorithm,
-        deepcopy(event_queue),
-        start,
-        period=period,
-        verbose=False,
-        interface_type=interface_type,
-    )
+
+    start_day = 1
+    end_day = 27
+    random_start = random.randint(start_day, end_day)
+
+    # Start and End times are used when collecting data.
+    start = timezone.localize(datetime(2018, 9, random_start))
+    end = timezone.localize(datetime(2018, 9, random_start + 1))
+    # How long each time discrete time interval in the simulation should be.
+    period = 5  # minutes
+
+    # Voltage of the network.
+    voltage = 220  # volts
+
+    # Default maximum charging rate for each EV battery.
+    default_battery_power = 32 * voltage / 1000  # kW
+
+    # Identifier of the site where data will be gathered.
+    site = 'caltech'
+
+    # For this experiment we use the predefined CaltechACN network.
+    cn = acnsim.sites.caltech_acn(basic_evse=True, voltage=voltage)
+
+    API_KEY = 'DEMO_TOKEN'
+    events = acnsim.acndata_events.generate_events(API_KEY, site, start, end, period, voltage, default_battery_power)
+    return acnsim.Simulator(cn, algorithm, events, start, period=period, verbose=False)
+    # timezone = pytz.timezone("America/Los_Angeles")
+    # start = timezone.localize(datetime(2018, 9, 5))
+    # period = 1
+    #
+    # # Make random event queue
+    # cn = acnsim.sites.simple_acn(
+    #     ["EVSE-001", "EVSE-002"], aggregate_cap=32 * 208 / 1000
+    # )
+    # event_list = []
+    # for station_id in cn.station_ids:
+    #     event_list.extend(random_plugin(10, 100, station_id))
+    # event_queue = events.EventQueue(event_list)
+    #
+    # # Simulation to be wrapped
+    # return acnsim.Simulator(
+    #     deepcopy(cn),
+    #     algorithm,
+    #     deepcopy(event_queue),
+    #     start,
+    #     period=period,
+    #     verbose=False,
+    #     interface_type=interface_type,
+    # )
 
 
 def interface_generating_function(iface_type=GymTrainingInterface) -> Interface:
@@ -169,7 +226,7 @@ def interface_generating_function(iface_type=GymTrainingInterface) -> Interface:
     """
     schedule_rl = None
     # Simulation to be wrapped
-    sim = _random_sim_builder(schedule_rl, iface_type=iface_type)
+    sim = _random_sim_builder(schedule_rl, iface_type)
     iface = iface_type(sim)
     return iface
 
@@ -214,26 +271,141 @@ def interface_generating_function(iface_type=GymTrainingInterface) -> Interface:
 # a registered gym environment that provides this functionality. To
 # make this environment, we need to input as a `kwarg` the
 # `sim_gen_func` we defined earlier.
+from gym_acnportal.gym_acnsim import *
+from gym_acnportal.gym_acnsim.envs import *
+
+# coding=utf-8
+"""
+Open AI Gym plugin for ACN-Sim. Provides several customizable
+environments for training reinforcement learning (RL) agents. See
+tutorial X for examples of usage.
+"""
+
+import numpy as np
+from scipy import stats
+import math
+
+import gym
+from gym import error, spaces, utils
+from gym.utils import seeding
+
+# EV data management
+# import gym_EV.envs.data_collection as data_collection# Get EV Charging Data
+# import pymongo
+# import bson
+# from datetime import datetime, timedelta
+
+# RL packages
+import random  # Handling random number generation
+from random import choices
+from collections import deque  # Ordered collection with ends
+from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
+
+
+
+# rather use gymnasium name instead of gym to make things clear
+from typing import List, Dict
+import sys
+
+# sys.path.append('gym-acnportal/gym_acnportal/gym_acnsim')
+# print(sys.path)
+
+# from gym_acnportal.gym_acnsim.__init__ import gym
+from gymnasium.envs import registry
+from gymnasium.envs.registration import registry, register, EnvSpec
+# from envs import CustomSimEnv
+
+
+all_envs: List[EnvSpec] = list(registry.values())
+env_ids = [env_spec.id for env_spec in all_envs]
+gym_env_dict: Dict[str, str] = {
+    "custom-acnsim-v0": "gym_acnportal.gym_acnsim.envs:CustomSimEnv",
+    "default-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_default_sim_env",
+    "ev-acnsim-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:make_ev_sim_env",
+    "rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:RebuildingEnv",
+    "default-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_rebuilding_default_sim_env",
+    "ev-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:make_rebuilding_ev_sim_env",
+    "ev-environment-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:EVEnv"
+}
+# default-rebuilding-acnsim
+# gym_env_dict: Dict[str, str] = {
+#     "custom-acnsim-v0": CustomSimEnv,
+#     "default-acnsim-v0": "envs:make_default_sim_env",
+#     "rebuilding-acnsim-v0": "envs:RebuildingEnv",
+#     "default-rebuilding-acnsim-v0": "envs:make_rebuilding_default_sim_env",
+# }
+
+# registration test
+for env_name, env_entry_point in gym_env_dict.items():
+    if env_name not in env_ids:
+        register(id=env_name, entry_point=env_entry_point)
+env_name = "default-rebuilding-acnsim-v0"
+for key in gym_env_dict.keys():
+    try:
+        gymnasium.make(key)
+        print(f"The '{key}' environment exists.")
+    except gymnasium.error.UnregisteredEnv:
+        print(f"The '{key}' environment does not exist.")
+    except Exception as e:
+        # Handling other types of exceptions
+        print(f'Environment {key} registered. An error occurred: {e}')
+del register, registry, all_envs, gym_env_dict, List, Dict
+
+
+# env = gymnasium.make(
+#                  "default-rebuilding-acnsim-v0",
+#                  interface_generating_function=interface_generating_function,
+#              )
+
+
 vec_env = DummyVecEnv(
     [
         lambda: FlattenObservation(
-            gym.make(
+            gymnasium.make(
                 "default-rebuilding-acnsim-v0",
                 interface_generating_function=interface_generating_function,
             )
         )
     ]
 )
-model = PPO2("MlpPolicy", vec_env, verbose=2)
-num_iterations: int = int(1e6)
-model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e6'}.zip"
+
+
+thesis_env = DummyVecEnv(
+    [
+        lambda: FlattenObservation(
+            gymnasium.make("ev-rebuilding-acnsim-v0",
+                interface_generating_function=interface_generating_function,
+            )
+        )
+    ]
+)
+# num of iterations doesnt seem to help
+
+
+
+model = PPO("MlpPolicy", vec_env, verbose=2)
+# model = SAC(policy="MlpPolicy",
+#             env=thesis_env,
+#             verbose=2,
+#             # learning_rate=3e-4,
+#             # batch_size=256,
+#             # buffer_size=10**6
+#             )
+# model = SAC("MlpPolicy", thesis_env, verbose=2)
+num_iterations: int = int(1e3)
+model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e3'}.zip"
 model.learn(num_iterations)
-# model.save(model_name)
+model.save(model_name)
 
 # We've trained the above model for 10000 iterations. Packaged with this
 # library is the same model trained for 1000000 iterations, which we
 # will now load
-# model.load(model_name)
+model.load(model_name)
+
+from typing import List, Dict
+def process_items(items: List[str]):
+    for item in items:
+        print(item)
 #
 #
 # This is a stable_baselines PPO2 model. PPO2 requires vectorized
@@ -249,10 +421,12 @@ class StableBaselinesRLModel(SimRLModelWrapper):
         self,
         observation: object,
         reward: float,
-        done: bool,
-        info: Dict[Any, Any] = None,
+        terminated: bool,
+        truncated: bool,
+        # done: bool,
+        info=None,
         **kwargs,
-    ) -> np.ndarray:
+    ) -> tuple[ndarray, tuple[ndarray, ...] | None]:
         """ See SimRLModelWrapper.predict(). """
         return self.model.predict(observation, **kwargs)
 
@@ -283,6 +457,7 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
         self.max_recompute = max_recompute
         self._model = None
 
+    # memodict: Optional[Dict]
     def __deepcopy__(
         self, memodict: Optional[Dict] = None
     ) -> "GymTrainedAlgorithmVectorized":
@@ -391,6 +566,8 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
         env.action = self.model.predict(
             self._env.env_method("observation", env.observation)[0],
             env.reward,
+            # TODO: change to terminated and truncated
+            env.done,
             env.done,
             env.info,
         )[0]
@@ -399,8 +576,8 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
 
 
 evaluation_algorithm = GymTrainedAlgorithmVectorized()
-evaluation_simulation = _random_sim_builder()
-evaluation_simulation.update_scheduler(evaluation_algorithm, GymTrainedInterface)
+evaluation_simulation = _random_sim_builder(evaluation_algorithm, GymTrainedInterface)
+evaluation_simulation.update_scheduler(evaluation_algorithm)
 edf_simulation = deepcopy(evaluation_simulation)
 rr_simulation = deepcopy(evaluation_simulation)
 edf_simulation.update_scheduler(SortedSchedulingAlgo(earliest_deadline_first))
@@ -411,7 +588,13 @@ rr_simulation.update_scheduler(RoundRobin(first_come_first_served))
 observation_objects: List[SimObservation] = default_observation_objects
 action_object: SimAction = default_action_object
 reward_functions: List[Callable[[BaseSimEnv], float]] = [
-    reward_functions.hard_charging_reward
+    # reward_functions.hard_charging_reward
+    reward_functions.soft_charging_reward,
+    reward_functions.current_constraint_violation,
+    reward_functions.evse_violation,
+    reward_functions.hard_charging_reward,
+    reward_functions.charging_reward
+
 ]
 eval_env: DummyVecEnv = DummyVecEnv(
     [
@@ -425,21 +608,44 @@ eval_env: DummyVecEnv = DummyVecEnv(
         )
     ]
 )
-evaluation_algorithm.register_env(eval_env)
 evaluation_algorithm.register_model(StableBaselinesRLModel(model))
 
+evaluation_algorithm.register_env(eval_env)
 evaluation_simulation.run()
 edf_simulation.run()
 rr_simulation.run()
 
+total_energy_prop = acnsim.proportion_of_energy_delivered(evaluation_simulation)
+print("Proportion of requested energy delivered (RL alg): {0}".format(total_energy_prop))
+
+
+total_energy_prop = acnsim.proportion_of_energy_delivered(edf_simulation)
+print("Proportion of requested energy delivered (EDF): {0}".format(total_energy_prop))
+
+
+total_energy_prop = acnsim.proportion_of_energy_delivered(rr_simulation)
+print("Proportion of requested energy delivered (Round robin): {0}".format(total_energy_prop))
+
+
+
 fig, axs = plt.subplots(3)
+fig.subplots_adjust(hspace=0.5)
+# first picture charging rates from [0]
 rl = axs[0].plot(evaluation_simulation.charging_rates[0], label="RL Agent")
-edf = axs[0].plot(rr_simulation.charging_rates[0], label="EDF")
+edf = axs[0].plot(edf_simulation.charging_rates[0], label="EDF")
+round_robin = axs[0].plot(rr_simulation.charging_rates[0], label="Round Robin")
+
+# charging rates from second line
 axs[1].plot(evaluation_simulation.charging_rates[1])
+axs[1].plot(edf_simulation.charging_rates[1])
 axs[1].plot(rr_simulation.charging_rates[1])
+
+
 axs[2].plot(acnsim.aggregate_current(evaluation_simulation))
+axs[2].plot(acnsim.aggregate_current(edf_simulation))
 axs[2].plot(acnsim.aggregate_current(rr_simulation))
 
+# labels
 axs[0].title.set_text("Current, Line 1")
 axs[1].title.set_text("Current, Line 2")
 axs[2].title.set_text("Total Current")

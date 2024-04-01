@@ -7,9 +7,7 @@ Simulator.
 import warnings
 from copy import deepcopy
 from typing import List, Dict, Optional, Tuple
-
 import numpy as np
-
 from acnportal.acnsim import Interface
 
 
@@ -192,9 +190,9 @@ class GymTrainingInterface(GymTrainedInterface):
     This class of interface facilitates training by allowing an agent
     to step the Simulator by a single iteration.
     """
-
+    # force_feasibility: bool = True before
     def step(
-        self, new_schedule: Dict[str, List[float]], force_feasibility: bool = True
+        self, new_schedule: Dict[str, List[float]], force_feasibility: bool = False
     ) -> Tuple[bool, bool]:
         """ Step the simulation using the input new_schedule until the
         simulator requires a new charging schedule. If the provided
@@ -221,17 +219,20 @@ class GymTrainingInterface(GymTrainedInterface):
         """
         # Check that length of new schedules is not less than
         # max_recompute.
+        # check for examples
+        # self._simulator.max_recompute = 1
         if (
             len(new_schedule) == 0
             or self._simulator.max_recompute is None
             or len(list(new_schedule.values())[0]) < self._simulator.max_recompute
         ):
-            warnings.warn(
-                f"Length of schedules is less than this simulation's "
-                f"max_recompute parameter "
-                f"{self._simulator.max_recompute}. Pilots may be "
-                f"updated with zeros."
-            )
+            ...
+            # warnings.warn(
+            #     f"Length of schedules is less than this simulation's "
+            #     f"max_recompute parameter "
+            #     f"{self._simulator.max_recompute}. Pilots may be "
+            #     f"updated with zeros."
+            # )
 
         # If max_recompute is not 1, resolve will need to be set manually to False
         # to initiate the while loop in step().

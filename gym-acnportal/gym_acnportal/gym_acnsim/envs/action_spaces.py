@@ -24,8 +24,8 @@ strict.
 from typing import Callable, Dict, List
 
 import numpy as np
-from gym import Space
-from gym.spaces import Box
+from gymnasium import Space
+from gymnasium.spaces import Box
 
 from ..interfaces import GymTrainedInterface
 
@@ -254,3 +254,75 @@ def zero_centered_single_charging_schedule() -> SimAction:
         }
 
     return SimAction(space_function, to_schedule, "zero-centered single schedule")
+
+
+
+def full_charging_schedule() -> SimAction:
+    """ Generates a SimAction instance that wraps functions to handle
+    actions taking the form of a vector of pilot signals. For this
+    action type, actions are assumed to be centered about 0, in that
+    an action of 0 corresponds to a pilot signal of max_rate/2. So,
+    to convert to a schedule, actions need to be shifted by a certain
+    amount and converted to a dictionary.
+
+    As a 0 min rate is assumed to be allowed, the action space lower
+    bound is set to -rate_offset_array if the station min rates are all
+    greater than 0.
+    """
+
+    # noinspection PyMissingOrEmptyDocstring
+    def space_function(interface: GymTrainedInterface) -> Box:
+        num_evses: int = len(interface.station_ids)
+        max_rates: np.ndarray = np.array(
+            [
+                interface.max_pilot_signal(station_id)
+                for station_id in interface.station_ids
+            ]
+        )
+        min_rates: np.ndarray = np.array(
+            [
+                interface.min_pilot_signal(station_id)
+                for station_id in interface.station_ids
+            ]
+        )
+        rate_offset_array: np.ndarray = (max_rates + min_rates) / 2
+        return Box(
+            low=0,
+            high=32,
+            shape=(num_evses + 10,),
+            dtype="float",
+        )
+
+    # noinspection PyMissingOrEmptyDocstring
+    def to_schedule(
+        interface: GymTrainedInterface, action: np.ndarray
+    ) -> Dict[str, List[float]]:
+        if len(action.shape) > 1:
+            raise TypeError(
+                f"Single schedule action type only accepts schedules "
+                f"of length <= 1 in a 1-D numpy array. Got shape = "
+                f"{len(action.shape)}."
+            )
+        max_rates: np.ndarray = np.array(
+            [
+                interface.max_pilot_signal(station_id)
+                for station_id in interface.station_ids
+            ]
+        )
+        min_rates: np.ndarray = np.array(
+            [
+                interface.min_pilot_signal(station_id)
+                for station_id in interface.station_ids
+            ]
+        )
+        # rate_offset_array: np.ndarray = (max_rates + min_rates) / 2
+        # offset_action: np.ndarray = action + rate_offset_array
+        offset_action: np.ndarray = action
+        return {
+            interface.station_ids[i]: [offset_action[i]]
+            for i in range(len(offset_action))
+        }
+
+    return SimAction(space_function, to_schedule, "zero-centered single schedule")
+
+

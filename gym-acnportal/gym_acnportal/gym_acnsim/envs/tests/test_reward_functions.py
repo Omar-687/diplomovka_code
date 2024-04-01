@@ -2,7 +2,7 @@
 """ Tests for reward functions. """
 import unittest
 from typing import Callable, Dict, List
-from unittest.mock import create_autospec, Mock, patch
+from unittest.mock import create_autospec
 
 import numpy as np
 from acnportal.acnsim import Simulator, ChargingNetwork, EVSE, Current, FiniteRatesEVSE

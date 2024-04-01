@@ -157,23 +157,29 @@ class Simulator(BaseSimObj):
         Returns:
             bool: True if the simulation is complete.
         """
-        while (
-            not self.event_queue.empty()
-            and not self._resolve
-            and (
-                self.max_recompute is None
-                or (self._iteration - self._last_schedule_update < self.max_recompute)
+        # TODO: finish it so it is only run with 1 iteration
+        while not self.event_queue.empty():
+            current_events = self.event_queue.get_current_events(self._iteration)
+            for e in current_events:
+                self.event_history.append(e)
+                self._process_event(e)
+            if (
+                    self._resolve
+                    or self.max_recompute is not None
+                    and (
+                    self._last_schedule_update is None
+                    or self._iteration - self._last_schedule_update
+                    >= self.max_recompute
             )
-        ):
-            self._update_schedules(new_schedule)
-            if self.schedule_history is not None:
-                self.schedule_history[self._iteration] = new_schedule
-            self._last_schedule_update = self._iteration
-            self._resolve = False
-            if self.event_queue.get_last_timestamp() is not None:
-                width_increase = max(
-                    self.event_queue.get_last_timestamp() + 1, self._iteration + 1
-                )
+            ):
+                # new_schedule = self.scheduler.run()
+                self._update_schedules(new_schedule)
+                if self.schedule_history is not None:
+                    self.schedule_history[self._iteration] = new_schedule
+                self._last_schedule_update = self._iteration
+                self._resolve = False
+            if not self.event_queue.empty():
+                width_increase = self.event_queue.get_last_timestamp() + 1
             else:
                 width_increase = self._iteration + 1
             self.pilot_signals = _increase_width(self.pilot_signals, width_increase)
@@ -182,11 +188,55 @@ class Simulator(BaseSimObj):
             self._store_actual_charging_rates()
             self.network.post_charging_update()
             self._iteration = self._iteration + 1
-            current_events = self.event_queue.get_current_events(self._iteration)
-            for e in current_events:
-                self.event_history.append(e)
-                self._process_event(e)
+            break
         return self.event_queue.empty()
+    # def step(self, new_schedule):
+    #     """ Step the simulation until the next schedule recompute is
+    #     required.
+    #
+    #     The step function executes a single iteration of the run()
+    #     function. However, the step function updates the simulator with
+    #     an input schedule rather than query the scheduler for a new
+    #     schedule when one is required. Also, step will return a flag if
+    #     the simulation is done.
+    #
+    #     Args:
+    #         new_schedule (Dict[str, List[number]]): Dictionary mapping
+    #             station ids to a schedule of pilot signals.
+    #
+    #     Returns:
+    #         bool: True if the simulation is complete.
+    #     """
+    #     while (
+    #         not self.event_queue.empty()
+    #         and not self._resolve
+    #         and (
+    #             self.max_recompute is None
+    #             or (self._iteration - self._last_schedule_update < self.max_recompute)
+    #         )
+    #     ):
+    #         self._update_schedules(new_schedule)
+    #         if self.schedule_history is not None:
+    #             self.schedule_history[self._iteration] = new_schedule
+    #         self._last_schedule_update = self._iteration
+    #         self._resolve = False
+    #         if self.event_queue.get_last_timestamp() is not None:
+    #             width_increase = max(
+    #                 self.event_queue.get_last_timestamp() + 1, self._iteration + 1
+    #             )
+    #         else:
+    #             width_increase = self._iteration + 1
+    #         self.pilot_signals = _increase_width(self.pilot_signals, width_increase)
+    #         self.charging_rates = _increase_width(self.charging_rates, width_increase)
+    #         self.network.update_pilots(self.pilot_signals, self._iteration, self.period)
+    #         self._store_actual_charging_rates()
+    #         self.network.post_charging_update()
+    #         self._iteration = self._iteration + 1
+    #         current_events = self.event_queue.get_current_events(self._iteration)
+    #         for e in current_events:
+    #             self.event_history.append(e)
+    #             self._process_event(e)
+    #     return self.event_queue.empty()
 
     def get_active_evs(self):
         """ Return all EVs which are plugged in and not fully charged at the current time.
@@ -274,12 +324,13 @@ class Simulator(BaseSimObj):
             max_diff = diff_vec[max_idx]
             max_timeidx = max_idx[1]
             max_constraint = self.network.constraint_index[max_idx[0]]
-            warnings.warn(
-                f"Invalid schedule provided at iteration {self._iteration}. "
-                f"Max violation is {max_diff} A on {max_constraint} "
-                f"at time index {max_timeidx}.",
-                UserWarning,
-            )
+            # warnings slow down execution, maybe add them in future
+            # warnings.warn(
+            #     f"Invalid schedule provided at iteration {self._iteration}. "
+            #     f"Max violation is {max_diff} A on {max_constraint} "
+            #     f"at time index {max_timeidx}.",
+            #     UserWarning,
+            # )
         if self._iteration + schedule_length <= self.pilot_signals.shape[1]:
             self.pilot_signals[
                 :, self._iteration : (self._iteration + schedule_length)

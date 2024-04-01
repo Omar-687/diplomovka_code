@@ -16,9 +16,9 @@ from typing import List
 
 import numpy as np
 
-from .base_env import BaseSimEnv
-
-
+# from .base_env import BaseSimEnv
+# from base_env import BaseSimEnv
+from gym_acnportal.gym_acnsim.envs.base_env import BaseSimEnv
 def evse_violation(env: BaseSimEnv) -> float:
     """
     If a single EVSE constraint was violated by the last schedule, a
@@ -118,7 +118,8 @@ def current_constraint_violation(env: BaseSimEnv) -> float:
     # Calculate violation of each individual constraint.
     difference_vector: np.ndarray = np.array(
         [
-            0 if out_vector[i] <= magnitudes[i] else out_vector[i] - magnitudes[i]
+            # changed this so it doesnt give error
+            0 if out_vector[i][0] <= magnitudes[i] else out_vector[i][0] - magnitudes[i]
             for i in range(len(out_vector))
         ]
     )
@@ -133,18 +134,49 @@ def soft_charging_reward(env: BaseSimEnv) -> float:
     """
     Rewards for charge delivered in the last timestep.
     """
-    return float(
+    a = float(
         np.sum(env.interface.charging_rates - env.prev_interface.charging_rates)
     )
+    # print(f'soft charging reward = {a}')
 
+    return a
 
+def charging_reward(env: BaseSimEnv) -> float:
+    return np.sum(env.interface.charging_rates)
+
+def ev_example_reward(env: BaseSimEnv):
+    env.penalty = 0
+    for i in np.nonzero(env.state[:, 2])[0]:
+        # The EV has no remaining time
+        if env.state[i, 0] == 0:
+            # The EV is overdue
+            if env.state[i, 1] > 0:
+                env.penalty = 10 * env.gamma * env.state[i, 1]
+            # Deactivate the EV and reset
+            env.state[i, :] = 0
+
+        # Use soft penalty
+        # else:
+        #   penalty = self.gamma * self.state[0, 1] / self.state[i, 0]
+
+    # Update rewards
+    # Set entropy zero if feedback is allzero
+    if not np.any(env.action[-env.n_levels:]):
+        env.flexibility = 0
+    else:
+        env.flexibility = env.alpha * (stats.entropy(env.action[-env.n_levels:])) ** 2
+
+    env.tracking_error = env.beta * (np.sum(env.action[:env.n_EVs]) - env.signal) ** 2
+    reward = (env.flexibility - env.tracking_error - env.penalty) / 100
 def hard_charging_reward(env: BaseSimEnv) -> float:
     """
     Rewards for charge delivered in the last timestep, but only
     if constraint and evse violations are 0.
     """
-    return (
+    a = (
         soft_charging_reward(env)
         if evse_violation(env) == 0 and current_constraint_violation(env) == 0
         else 0
     )
+    # print(f'hard charging reward = {a}')
+    return a
