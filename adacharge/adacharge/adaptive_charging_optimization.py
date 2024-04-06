@@ -198,7 +198,7 @@ class AdaptiveChargingOptimization:
         return {}
 
     def build_objective(
-        self, rates: cp.Variable, infrastructure: InfrastructureInfo, **kwargs
+        self, rates: cp.Variable, active_sessions:List[SessionInfo], infrastructure: InfrastructureInfo, **kwargs
     ):
         def _merge_dicts(*args):
             """ Merge two dictionaries where d2 override d1 when there is a conflict. """
@@ -211,6 +211,7 @@ class AdaptiveChargingOptimization:
         for component in self.objective_configuration:
             obj += component.coefficient * component.function(
                 rates,
+                active_sessions,
                 infrastructure,
                 self.interface,
                 **_merge_dicts(kwargs, component.kwargs),
@@ -275,7 +276,10 @@ class AdaptiveChargingOptimization:
 
         # Objective Function
         objective = cp.Maximize(
-            self.build_objective(rates, infrastructure, prev_peak=prev_peak)
+            self.build_objective(rates=rates,
+                                 active_sessions=active_sessions,
+                                 infrastructure=infrastructure,
+                                 prev_peak=prev_peak)
         )
         return {
             "objective": objective,
@@ -339,7 +343,7 @@ def charging_power(rates, infrastructure, **kwargs):
     return cp.multiply(rates, voltage_matrix) / 1e3
 
 
-def aggregate_power(rates, infrastructure, **kwargs):
+def aggregate_power(rates, active_sessions, infrastructure, **kwargs):
     """ Returns aggregate charging power for each time period. """
     return cp.sum(charging_power(rates, infrastructure=infrastructure), axis=0)
 
@@ -351,7 +355,7 @@ def get_period_energy(rates, infrastructure, period, **kwargs):
     return power * period_in_hours
 
 
-def aggregate_period_energy(rates, infrastructure, interface, **kwargs):
+def aggregate_period_energy(rates, active_sessions, infrastructure, interface, **kwargs):
     """ Returns the aggregate energy delivered in kWh during each time period. """
     # get charging rates in kWh per period
     energy_per_period = get_period_energy(
@@ -360,7 +364,7 @@ def aggregate_period_energy(rates, infrastructure, interface, **kwargs):
     return cp.sum(energy_per_period, axis=0)
 
 
-def quick_charge(rates, infrastructure, interface, **kwargs):
+def quick_charge(rates, active_sessions, infrastructure, interface, **kwargs):
     optimization_horizon = rates.shape[1]
     c = np.array(
         [
@@ -371,20 +375,20 @@ def quick_charge(rates, infrastructure, interface, **kwargs):
     return c @ cp.sum(rates, axis=0)
 
 
-def equal_share(rates, infrastructure, interface, **kwargs):
+def equal_share(rates, active_sessions, infrastructure, interface, **kwargs):
     return -cp.sum_squares(rates)
 
 
-def tou_energy_cost(rates, infrastructure, interface, **kwargs):
+def tou_energy_cost(rates, active_sessions, infrastructure, interface, **kwargs):
     current_prices = interface.get_prices(rates.shape[1])  # $/kWh
     return -current_prices @ aggregate_period_energy(rates, infrastructure, interface)
 
 
-def total_energy(rates, infrastructure, interface, **kwargs):
+def total_energy(rates, active_sessions, infrastructure, interface, **kwargs):
     return cp.sum(get_period_energy(rates, infrastructure, interface.period))
 
 
-def peak(rates, infrastructure, interface, baseline_peak=0, **kwargs):
+def peak(rates, active_sessions, infrastructure, interface, baseline_peak=0, **kwargs):
     agg_power = aggregate_power(rates, infrastructure)
     max_power = cp.max(agg_power)
     prev_peak = interface.get_prev_peak() * infrastructure.voltages[0] / 1000
@@ -394,13 +398,13 @@ def peak(rates, infrastructure, interface, baseline_peak=0, **kwargs):
         return cp.maximum(max_power, prev_peak)
 
 
-def demand_charge(rates, infrastructure, interface, baseline_peak=0, **kwargs):
+def demand_charge(rates, active_sessions, infrastructure, interface, baseline_peak=0, **kwargs):
     p = peak(rates, infrastructure, interface, baseline_peak, **kwargs)
     dc = interface.get_demand_charge()
     return -dc * p
 
 
-def load_flattening(rates, infrastructure, interface, external_signal=None, **kwargs):
+def load_flattening(rates, active_sessions, infrastructure, interface, external_signal=None, **kwargs):
     if external_signal is None:
         external_signal = np.zeros(rates.shape[1])
     aggregate_rates_kW = aggregate_power(rates, infrastructure)
@@ -414,3 +418,28 @@ def load_flattening(rates, infrastructure, interface, external_signal=None, **kw
 #     if np.any(prev_mask):
 #         reg -= cp.norm(rates[0, prev_mask] - previous_rates[prev_mask], p=normp)
 #     return reg
+
+def non_completion_penalty(rates, active_sessions:List[SessionInfo], infrastructure, interface, p_norm=1, **kwargs):
+    if p_norm < 1:
+        return ValueError("p_norm must be at least 1.")
+    requested_energies = np.zeros(rates.shape)
+    energies = get_period_energy(rates, infrastructure, interface.period)
+    for session in active_sessions:
+        i = infrastructure.get_station_index(session.station_id)
+        requested_energies[i][0] = session.requested_energy
+    energies = cp.sum(energies - requested_energies, axis=1)
+
+
+    # diff = cp.sum(energies,axis=1) - requested_energies
+    # res = cp.sum(diff, axis=1)
+    # energies = cp.sum(energies,axis=0)
+    res = cp.norm(energies, p_norm)
+    # TODO: check if the norm does the same as in article
+    # TODO: check functionality with more experiments
+    # res = cp.norm(cp.vstack([energies, requested_energies]), p_norm)
+    # x = 1 / 0
+    return -res
+
+# def smoothing(
+#
+# )

@@ -5,10 +5,11 @@ Simulation.
 """
 from copy import deepcopy
 from typing import Optional, Dict, List, Any, Tuple
-
+# from gym_acnportal.gym_acnsim.envs.live_plot_test import Animation
 import gym
 import numpy as np
-
+import matplotlib.pyplot as plt
+import numpy as np
 # from ..interfaces import GymTrainedInterface, GymTrainingInterface
 # from interfaces import GymTrainedInterface, GymTrainingInterface
 from gym_acnportal.gym_acnsim.interfaces import GymTrainedInterface, GymTrainingInterface
@@ -21,8 +22,9 @@ class BaseSimEnv(gym.Env):
         action_to_schedule
         observation_from_state
         reward_from_state
-        done_from_state
-
+        NO = done_from_state
+        terminated_from_state
+        truncated_from_state
     Subclasses must also specify observation_space and action_space,
     either as class or instance variables.
 
@@ -61,7 +63,9 @@ class BaseSimEnv(gym.Env):
     _schedule: Dict[str, List[float]]
     _observation: Optional[np.ndarray]
     _reward: Optional[float]
-    _done: Optional[bool]
+    _terminated = Optional[bool]
+    _truncated = Optional[bool]
+    # _done: Optional[bool]
     _info: Optional[Dict[Any, Any]]
 
     def __init__(self, interface: Optional[GymTrainedInterface]) -> None:
@@ -73,7 +77,9 @@ class BaseSimEnv(gym.Env):
         self._observation = None
         self._reward = None
         # TODO: replace None with terminated and truncated
-        self._done = None
+        # self._done = None
+        self._terminated = None
+        self._truncated = None
         self._info = None
 
     @property
@@ -128,12 +134,27 @@ class BaseSimEnv(gym.Env):
         self._reward = new_reward
 
     @property
-    def done(self) -> bool:
-        return deepcopy(self._done)
+    def terminated(self) -> bool:
+        return deepcopy(self._terminated)
 
-    @done.setter
-    def done(self, new_done: bool) -> None:
-        self._done = new_done
+    @terminated.setter
+    def terminated(self, new_terminated: float) -> None:
+        self._terminated = new_terminated
+
+    @property
+    def truncated(self) -> bool:
+        return deepcopy(self._truncated)
+
+    @truncated.setter
+    def truncated(self, new_truncated: bool) -> None:
+        self._truncated = new_truncated
+    # @property
+    # def done(self) -> bool:
+    #     return deepcopy(self._done)
+    #
+    # @done.setter
+    # def done(self, new_done: bool) -> None:
+    #     self._done = new_done
 
     @property
     def info(self) -> Dict[Any, Any]:
@@ -160,7 +181,9 @@ class BaseSimEnv(gym.Env):
             )
         self.observation = self.observation_from_state()
         self.reward = self.reward_from_state()
-        self.done = self.done_from_state()
+        # self.done = self.done_from_state()
+        self.terminated = self.terminated_from_state()
+        self.truncated = self.truncated_from_state()
         self.info = self.info_from_state()
 
     def store_previous_state(self) -> None:
@@ -172,6 +195,20 @@ class BaseSimEnv(gym.Env):
         """
         self._prev_interface = self.interface
 
+    def print_rewards(self, rewards=None) -> None:
+        # Data for plotting
+        t = np.arange(0.0, 2.0, 0.01)
+        s = 1 + np.sin(2 * np.pi * t)
+
+        fig, ax = plt.subplots()
+        ax.plot(t, s)
+
+        ax.set(xlabel='time (s)', ylabel='voltage (mV)',
+               title='About as simple as it gets, folks')
+        ax.grid()
+
+        fig.savefig("test.png")
+        plt.show()
     def step(
         self, action: np.ndarray
     ) -> Tuple[np.ndarray, float, bool, bool, Dict[Any, Any]]:
@@ -210,8 +247,8 @@ class BaseSimEnv(gym.Env):
         self._interface.step(self.schedule)
 
         self.update_state()
-
-        return self.observation, self.reward, self.done, self.done, self.info
+        # self.print_rewards()
+        return self.observation, self.reward, self.terminated, self.truncated, self.info
 
     def reset(self, seed=None, options=None) -> tuple[dict[str, np.array], dict]:
         """ Resets the state of the simulation and returns an initial
@@ -262,14 +299,21 @@ class BaseSimEnv(gym.Env):
         """
         raise NotImplementedError
 
-    def done_from_state(self) -> bool:
-        """ Determine if the simulation is done from the state of the
-        simulator
-
-        Returns:
-            done (bool): True if the simulation is done, False if not
-        """
+    def truncated_from_state(self) -> bool:
         raise NotImplementedError
+
+    def terminated_from_state(self) -> bool:
+        raise NotImplementedError
+
+
+    # def done_from_state(self) -> bool:
+    #     """ Determine if the simulation is done from the state of the
+    #     simulator
+    #
+    #     Returns:
+    #         done (bool): True if the simulation is done, False if not
+    #     """
+    #     raise NotImplementedError
 
     def info_from_state(self) -> Dict[Any, Any]:
         """ Give information about the environment using the state of

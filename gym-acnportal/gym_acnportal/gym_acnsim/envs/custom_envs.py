@@ -30,7 +30,7 @@ import gym_acnportal.gym_acnsim.envs.reward_functions  as rf
 # from gym_acnportal.gym_acnsim.envs.reward_functions import B
 from gym_acnportal.gym_acnsim.envs.action_spaces import SimAction, zero_centered_single_charging_schedule
 from gym_acnportal.gym_acnsim.envs.observation import SimObservation
-from gym_acnportal.gym_acnsim.envs.interfaces import GymTrainedInterface
+from gym_acnportal.gym_acnsim.interfaces import GymTrainedInterface
 
 
 
@@ -172,14 +172,19 @@ class CustomSimEnv(BaseSimEnv):
             np.array([reward_func(self) for reward_func in self.reward_functions])
         )
 
-    def done_from_state(self) -> bool:
-        """ Determine if the simulation is done from the state of the
-        simulator
+    def terminated_from_state(self) -> bool:
+        return self.interface.is_terminated
 
-        Returns:
-            done (bool): True if the simulation is done, False if not
-        """
-        return self.interface.is_done
+    def truncated_from_state(self) -> bool:
+        return self.interface.is_truncated
+    # def done_from_state(self) -> bool:
+    #     """ Determine if the simulation is done from the state of the
+    #     simulator
+    #
+    #     Returns:
+    #         done (bool): True if the simulation is done, False if not
+    #     """
+    #     return self.interface.is_done
 
     def info_from_state(self) -> Dict[Any, Any]:
         """ Give information about the environment using the state of

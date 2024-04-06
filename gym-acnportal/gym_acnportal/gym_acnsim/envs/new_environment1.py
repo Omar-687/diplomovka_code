@@ -121,8 +121,8 @@ class EVEnv(BaseSimEnv):
         return sum(
       np.array([reward_func(self) for reward_func in self.reward_functions])
     )
-    def done_from_state(self):
-        return self.interface.is_done
+    # def done_from_state(self):
+    #     return self.interface.is_done
 
 
 

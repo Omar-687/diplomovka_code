@@ -88,6 +88,8 @@ from acnportal.algorithms import (
     RoundRobin,
 )
 
+import gym_EV.envs
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 
 
@@ -325,7 +327,10 @@ gym_env_dict: Dict[str, str] = {
     "rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:RebuildingEnv",
     "default-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs:make_rebuilding_default_sim_env",
     "ev-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:make_rebuilding_ev_sim_env",
-    "ev-environment-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:EVEnv"
+    "ev-environment-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:EVEnv",
+    "tongxin-ev0":"gym_EV.envs:EVEnv",
+    "tongxin-ev1":"gym_EV.envs:EVEnvOptim",
+    # "tongxin-ev1":gym_EV.envs.,
 }
 # default-rebuilding-acnsim
 # gym_env_dict: Dict[str, str] = {
@@ -370,6 +375,12 @@ vec_env = DummyVecEnv(
 )
 
 
+# vec_env = gymnasium.make(
+#                 "default-rebuilding-acnsim-v0",
+#                 interface_generating_function=interface_generating_function,
+#             )
+
+
 thesis_env = DummyVecEnv(
     [
         lambda: FlattenObservation(
@@ -379,275 +390,290 @@ thesis_env = DummyVecEnv(
         )
     ]
 )
-# num of iterations doesnt seem to help
+# environments seem to learn if the follow gymnasium interface
+# env = gymnasium.make("Pendulum-v1", render_mode="human")
+# env = gymnasium.make("MountainCarContinuous-v0")
+
+
+# env = gymnasium.make("tongxin-ev0")
+
+env = gymnasium.make("tongxin-ev1")
 
 
 
-model = PPO("MlpPolicy", vec_env, verbose=2)
-# model = SAC(policy="MlpPolicy",
-#             env=thesis_env,
-#             verbose=2,
-#             # learning_rate=3e-4,
-#             # batch_size=256,
-#             # buffer_size=10**6
-#             )
+
+# model = PPO("MlpPolicy", vec_env, verbose=2)
+model = SAC(policy="MlpPolicy",
+            env=env,
+            verbose=2,
+            # learning_rate=3e-4,
+            # batch_size=256,
+            # buffer_size=10**6
+            )
 # model = SAC("MlpPolicy", thesis_env, verbose=2)
-num_iterations: int = int(1e3)
+num_iterations: int = int(1e4)
 model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e3'}.zip"
-model.learn(num_iterations)
+n_episodes = 10
+n_max_timesteps = 1000
+num_iterations = n_episodes*n_max_timesteps
+print(num_iterations)
+max_episode_steps = 100000
+model.learn(total_timesteps=max_episode_steps,
+            log_interval=4)
 model.save(model_name)
 
 # We've trained the above model for 10000 iterations. Packaged with this
 # library is the same model trained for 1000000 iterations, which we
 # will now load
-model.load(model_name)
-
-from typing import List, Dict
-def process_items(items: List[str]):
-    for item in items:
-        print(item)
+# model.load(model_name)
+#
+# from typing import List, Dict
+# def process_items(items: List[str]):
+#     for item in items:
+#         print(item)
+# #
+# #
+# # This is a stable_baselines PPO2 model. PPO2 requires vectorized
+# # environments to run, so the model wrapper should convert between
+# # vectorized and non-vectorized environments.
+# class StableBaselinesRLModel(SimRLModelWrapper):
+#     """ An RL model wrapper that wraps stable_baselines style models.
+#     """
+#
+#     model: BaseRLModel
+#
+#     def predict(
+#         self,
+#         observation: object,
+#         reward: float,
+#         terminated: bool,
+#         truncated: bool,
+#         # done: bool,
+#         info=None,
+#         **kwargs,
+#     ) -> tuple[ndarray, tuple[ndarray, ...] | None]:
+#         """ See SimRLModelWrapper.predict(). """
+#         return self.model.predict(observation, **kwargs)
 #
 #
-# This is a stable_baselines PPO2 model. PPO2 requires vectorized
-# environments to run, so the model wrapper should convert between
-# vectorized and non-vectorized environments.
-class StableBaselinesRLModel(SimRLModelWrapper):
-    """ An RL model wrapper that wraps stable_baselines style models.
-    """
-
-    model: BaseRLModel
-
-    def predict(
-        self,
-        observation: object,
-        reward: float,
-        terminated: bool,
-        truncated: bool,
-        # done: bool,
-        info=None,
-        **kwargs,
-    ) -> tuple[ndarray, tuple[ndarray, ...] | None]:
-        """ See SimRLModelWrapper.predict(). """
-        return self.model.predict(observation, **kwargs)
-
-
-class GymTrainedAlgorithmVectorized(BaseAlgorithm):
-    """ Abstract algorithm class for Simulations using a
-    reinforcement learning agent that operates in an Open AI Gym
-    environment that is vectorized via stable-baselines VecEnv style
-    constructions.
-
-    Implements abstract class BaseAlgorithm.
-
-    Vectorized environments in stable-baselines do not inherit from
-    gym Env, so we must define a new algorithm class that handles
-    models that use these environments.
-
-    Args:
-        max_recompute (int): See BaseAlgorithm.
-    """
-
-    _env: Optional[DummyVecEnv]
-    max_recompute: Optional[int]
-    _model: Optional[SimRLModelWrapper]
-
-    def __init__(self, max_recompute: int = 1) -> None:
-        super().__init__()
-        self._env = None
-        self.max_recompute = max_recompute
-        self._model = None
-
-    # memodict: Optional[Dict]
-    def __deepcopy__(
-        self, memodict: Optional[Dict] = None
-    ) -> "GymTrainedAlgorithmVectorized":
-        return type(self)(max_recompute=self.max_recompute)
-
-    def register_interface(self, interface: Interface) -> None:
-        """ NOTE: Registering an interface sets the environment's
-        interface to GymTrainedInterface.
-        """
-        if not isinstance(interface, GymTrainedInterface):
-            gym_interface: GymTrainedInterface = GymTrainedInterface.from_interface(
-                interface
-            )
-        else:
-            gym_interface: GymTrainedInterface = interface
-        super().register_interface(gym_interface)
-        if self._env is not None:
-            self.env.interface = interface
-
-    @property
-    def env(self) -> DummyVecEnv:
-        """ Return the algorithm's gym environment.
-
-        Returns:
-            DummyVecEnv: A gym environment that wraps a simulation.
-
-        Raises:
-            ValueError: Exception raised if vec_env is accessed prior to
-                an vec_env being registered.
-        """
-        if self._env is not None:
-            return self._env
-        else:
-            raise ValueError(
-                "No vec_env has been registered yet. Please call "
-                "register_env with an appropriate environment before "
-                "attempting to call vec_env or schedule."
-            )
-
-    def register_env(self, env: DummyVecEnv) -> None:
-        """ Register a model that outputs schedules for the simulation.
-
-        Args:
-            env (DummyVecEnv): An vec_env wrapping a simulation.
-
-        Returns:
-            None
-        """
-        self._env = env
-
-    @property
-    def model(self) -> SimRLModelWrapper:
-        """ Return the algorithm's predictive model.
-
-        Returns:
-            SimRLModelWrapper: A predictive model that returns an array
-                of actions given an environment wrapping a simulation.
-
-        Raises:
-            ValueError: Exception raised if model is accessed prior to
-                a model being registered.
-        """
-        if self._model is not None:
-            return self._model
-        else:
-            raise ValueError(
-                "No model has been registered yet. Please call "
-                "register_model with an appropriate model before "
-                "attempting to call model or schedule."
-            )
-
-    def register_model(self, new_model: SimRLModelWrapper) -> None:
-        """ Register a model that outputs schedules for the simulation.
-
-        Args:
-            new_model (SimRLModelWrapper): A model that can be used for
-                predictions in ACN-Sim.
-
-        Returns:
-            None
-        """
-        self._model = new_model
-
-    def schedule(self, active_sessions: List[SessionInfo]) -> Dict[str, List[float]]:
-        """ Creates a schedule of charging rates for each EVSE in the
-        network. This only works if a model and environment have been
-        registered.
-
-        Overrides BaseAlgorithm.schedule().
-
-        The environment is assumed to be vectorized.
-        """
-        if self._model is None or self._env is None:
-            raise TypeError(
-                f"A model and environment must be set to call the "
-                f"schedule function for GymAlgorithm."
-            )
-        env: BaseSimEnv = self._env.envs[0].env
-        if not isinstance(env.interface, GymTrainedInterface):
-            raise TypeError(
-                "GymAlgorithm environment must have an interface of "
-                "type GymTrainedInterface to call schedule(). "
-            )
-        env.update_state()
-        env.store_previous_state()
-        env.action = self.model.predict(
-            self._env.env_method("observation", env.observation)[0],
-            env.reward,
-            # TODO: change to terminated and truncated
-            env.done,
-            env.done,
-            env.info,
-        )[0]
-        env.schedule = env.action_to_schedule()
-        return env.schedule
-
-
-evaluation_algorithm = GymTrainedAlgorithmVectorized()
-evaluation_simulation = _random_sim_builder(evaluation_algorithm, GymTrainedInterface)
-evaluation_simulation.update_scheduler(evaluation_algorithm)
-edf_simulation = deepcopy(evaluation_simulation)
-rr_simulation = deepcopy(evaluation_simulation)
-edf_simulation.update_scheduler(SortedSchedulingAlgo(earliest_deadline_first))
-rr_simulation.update_scheduler(RoundRobin(first_come_first_served))
-
-# Make a new, single-use environment with only charging rewards. One can do this by
-# explicitly defining which rewards, observations, and actions to include.
-observation_objects: List[SimObservation] = default_observation_objects
-action_object: SimAction = default_action_object
-reward_functions: List[Callable[[BaseSimEnv], float]] = [
-    # reward_functions.hard_charging_reward
-    reward_functions.soft_charging_reward,
-    reward_functions.current_constraint_violation,
-    reward_functions.evse_violation,
-    reward_functions.hard_charging_reward,
-    reward_functions.charging_reward
-
-]
-eval_env: DummyVecEnv = DummyVecEnv(
-    [
-        lambda: FlattenObservation(
-            CustomSimEnv(
-                evaluation_algorithm.interface,
-                observation_objects,
-                action_object,
-                reward_functions,
-            )
-        )
-    ]
-)
-evaluation_algorithm.register_model(StableBaselinesRLModel(model))
-
-evaluation_algorithm.register_env(eval_env)
-evaluation_simulation.run()
-edf_simulation.run()
-rr_simulation.run()
-
-total_energy_prop = acnsim.proportion_of_energy_delivered(evaluation_simulation)
-print("Proportion of requested energy delivered (RL alg): {0}".format(total_energy_prop))
-
-
-total_energy_prop = acnsim.proportion_of_energy_delivered(edf_simulation)
-print("Proportion of requested energy delivered (EDF): {0}".format(total_energy_prop))
-
-
-total_energy_prop = acnsim.proportion_of_energy_delivered(rr_simulation)
-print("Proportion of requested energy delivered (Round robin): {0}".format(total_energy_prop))
-
-
-
-fig, axs = plt.subplots(3)
-fig.subplots_adjust(hspace=0.5)
-# first picture charging rates from [0]
-rl = axs[0].plot(evaluation_simulation.charging_rates[0], label="RL Agent")
-edf = axs[0].plot(edf_simulation.charging_rates[0], label="EDF")
-round_robin = axs[0].plot(rr_simulation.charging_rates[0], label="Round Robin")
-
-# charging rates from second line
-axs[1].plot(evaluation_simulation.charging_rates[1])
-axs[1].plot(edf_simulation.charging_rates[1])
-axs[1].plot(rr_simulation.charging_rates[1])
-
-
-axs[2].plot(acnsim.aggregate_current(evaluation_simulation))
-axs[2].plot(acnsim.aggregate_current(edf_simulation))
-axs[2].plot(acnsim.aggregate_current(rr_simulation))
-
-# labels
-axs[0].title.set_text("Current, Line 1")
-axs[1].title.set_text("Current, Line 2")
-axs[2].title.set_text("Total Current")
-
-plt.show()
+# class GymTrainedAlgorithmVectorized(BaseAlgorithm):
+#     """ Abstract algorithm class for Simulations using a
+#     reinforcement learning agent that operates in an Open AI Gym
+#     environment that is vectorized via stable-baselines VecEnv style
+#     constructions.
+#
+#     Implements abstract class BaseAlgorithm.
+#
+#     Vectorized environments in stable-baselines do not inherit from
+#     gym Env, so we must define a new algorithm class that handles
+#     models that use these environments.
+#
+#     Args:
+#         max_recompute (int): See BaseAlgorithm.
+#     """
+#
+#     _env: Optional[DummyVecEnv]
+#     max_recompute: Optional[int]
+#     _model: Optional[SimRLModelWrapper]
+#
+#     def __init__(self, max_recompute: int = 1) -> None:
+#         super().__init__()
+#         self._env = None
+#         self.max_recompute = max_recompute
+#         self._model = None
+#
+#     # memodict: Optional[Dict]
+#     def __deepcopy__(
+#         self, memodict: Optional[Dict] = None
+#     ) -> "GymTrainedAlgorithmVectorized":
+#         return type(self)(max_recompute=self.max_recompute)
+#
+#     def register_interface(self, interface: Interface) -> None:
+#         """ NOTE: Registering an interface sets the environment's
+#         interface to GymTrainedInterface.
+#         """
+#         if not isinstance(interface, GymTrainedInterface):
+#             gym_interface: GymTrainedInterface = GymTrainedInterface.from_interface(
+#                 interface
+#             )
+#         else:
+#             gym_interface: GymTrainedInterface = interface
+#         super().register_interface(gym_interface)
+#         if self._env is not None:
+#             self.env.interface = interface
+#
+#     @property
+#     def env(self) -> DummyVecEnv:
+#         """ Return the algorithm's gym environment.
+#
+#         Returns:
+#             DummyVecEnv: A gym environment that wraps a simulation.
+#
+#         Raises:
+#             ValueError: Exception raised if vec_env is accessed prior to
+#                 an vec_env being registered.
+#         """
+#         if self._env is not None:
+#             return self._env
+#         else:
+#             raise ValueError(
+#                 "No vec_env has been registered yet. Please call "
+#                 "register_env with an appropriate environment before "
+#                 "attempting to call vec_env or schedule."
+#             )
+#
+#     def register_env(self, env: DummyVecEnv) -> None:
+#         """ Register a model that outputs schedules for the simulation.
+#
+#         Args:
+#             env (DummyVecEnv): An vec_env wrapping a simulation.
+#
+#         Returns:
+#             None
+#         """
+#         self._env = env
+#
+#     @property
+#     def model(self) -> SimRLModelWrapper:
+#         """ Return the algorithm's predictive model.
+#
+#         Returns:
+#             SimRLModelWrapper: A predictive model that returns an array
+#                 of actions given an environment wrapping a simulation.
+#
+#         Raises:
+#             ValueError: Exception raised if model is accessed prior to
+#                 a model being registered.
+#         """
+#         if self._model is not None:
+#             return self._model
+#         else:
+#             raise ValueError(
+#                 "No model has been registered yet. Please call "
+#                 "register_model with an appropriate model before "
+#                 "attempting to call model or schedule."
+#             )
+#
+#     def register_model(self, new_model: SimRLModelWrapper) -> None:
+#         """ Register a model that outputs schedules for the simulation.
+#
+#         Args:
+#             new_model (SimRLModelWrapper): A model that can be used for
+#                 predictions in ACN-Sim.
+#
+#         Returns:
+#             None
+#         """
+#         self._model = new_model
+#
+#     def schedule(self, active_sessions: List[SessionInfo]) -> Dict[str, List[float]]:
+#         """ Creates a schedule of charging rates for each EVSE in the
+#         network. This only works if a model and environment have been
+#         registered.
+#
+#         Overrides BaseAlgorithm.schedule().
+#
+#         The environment is assumed to be vectorized.
+#         """
+#         if self._model is None or self._env is None:
+#             raise TypeError(
+#                 f"A model and environment must be set to call the "
+#                 f"schedule function for GymAlgorithm."
+#             )
+#         env: BaseSimEnv = self._env.envs[0].env
+#         if not isinstance(env.interface, GymTrainedInterface):
+#             raise TypeError(
+#                 "GymAlgorithm environment must have an interface of "
+#                 "type GymTrainedInterface to call schedule(). "
+#             )
+#         env.update_state()
+#         env.store_previous_state()
+#         env.action = self.model.predict(
+#             self._env.env_method("observation", env.observation)[0],
+#             env.reward,
+#             # TODO: change to terminated and truncated
+#             env.truncated,
+#             env.terminated,
+#
+#             env.info,
+#         )[0]
+#         env.schedule = env.action_to_schedule()
+#         return env.schedule
+#
+#
+# evaluation_algorithm = GymTrainedAlgorithmVectorized()
+# evaluation_simulation = _random_sim_builder(evaluation_algorithm, GymTrainedInterface)
+# evaluation_simulation.update_scheduler(evaluation_algorithm)
+# edf_simulation = deepcopy(evaluation_simulation)
+# rr_simulation = deepcopy(evaluation_simulation)
+# edf_simulation.update_scheduler(SortedSchedulingAlgo(earliest_deadline_first))
+# rr_simulation.update_scheduler(RoundRobin(first_come_first_served))
+#
+# # Make a new, single-use environment with only charging rewards. One can do this by
+# # explicitly defining which rewards, observations, and actions to include.
+# observation_objects: List[SimObservation] = default_observation_objects
+# action_object: SimAction = default_action_object
+# reward_functions: List[Callable[[BaseSimEnv], float]] = [
+#     # reward_functions.hard_charging_reward
+#     reward_functions.soft_charging_reward,
+#     reward_functions.current_constraint_violation,
+#     reward_functions.evse_violation,
+#     reward_functions.hard_charging_reward,
+#     reward_functions.charging_reward
+#
+# ]
+# eval_env: DummyVecEnv = DummyVecEnv(
+#     [
+#         lambda: FlattenObservation(
+#             CustomSimEnv(
+#                 evaluation_algorithm.interface,
+#                 observation_objects,
+#                 action_object,
+#                 reward_functions,
+#             )
+#         )
+#     ]
+# )
+# evaluation_algorithm.register_model(StableBaselinesRLModel(model))
+#
+# evaluation_algorithm.register_env(eval_env)
+# evaluation_simulation.run()
+# edf_simulation.run()
+# rr_simulation.run()
+#
+# total_energy_prop = acnsim.proportion_of_energy_delivered(evaluation_simulation)
+# print("Proportion of requested energy delivered (RL alg): {0}".format(total_energy_prop))
+#
+#
+# total_energy_prop = acnsim.proportion_of_energy_delivered(edf_simulation)
+# print("Proportion of requested energy delivered (EDF): {0}".format(total_energy_prop))
+#
+#
+# total_energy_prop = acnsim.proportion_of_energy_delivered(rr_simulation)
+# print("Proportion of requested energy delivered (Round robin): {0}".format(total_energy_prop))
+#
+#
+#
+# fig, axs = plt.subplots(3)
+# fig.subplots_adjust(hspace=0.5)
+# # first picture charging rates from [0]
+# rl = axs[0].plot(evaluation_simulation.charging_rates[0], label="RL Agent")
+# edf = axs[0].plot(edf_simulation.charging_rates[0], label="EDF")
+# round_robin = axs[0].plot(rr_simulation.charging_rates[0], label="Round Robin")
+#
+# # charging rates from second line
+# axs[1].plot(evaluation_simulation.charging_rates[1])
+# axs[1].plot(edf_simulation.charging_rates[1])
+# axs[1].plot(rr_simulation.charging_rates[1])
+#
+#
+# axs[2].plot(acnsim.aggregate_current(evaluation_simulation))
+# axs[2].plot(acnsim.aggregate_current(edf_simulation))
+# axs[2].plot(acnsim.aggregate_current(rr_simulation))
+#
+# # labels
+# axs[0].title.set_text("Current, Line 1")
+# axs[1].title.set_text("Current, Line 2")
+# axs[2].title.set_text("Total Current")
+#
+# plt.show()

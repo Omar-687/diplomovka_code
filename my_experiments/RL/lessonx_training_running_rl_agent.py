@@ -19,7 +19,6 @@ Note: This tutorial uses stable_baselines: https://github.com/hill-a/stable-base
 for baseline algorithms. As of this writing, stable_baselines requires Tensorflow and
 Tensorflow gpu <2.0.0, >=1.8.0, so you may need to install in a new environment to
 run this tutorial.
-
 """
 
 import os
@@ -27,7 +26,6 @@ import random
 from copy import deepcopy
 from datetime import datetime
 from typing import List, Callable, Optional, Dict, Any
-
 import gymnasium
 import numpy as np
 # import gym
@@ -52,7 +50,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from acnportal import acnsim
 from acnportal.acnsim import events, models, Simulator, Interface
 
-from gym_acnportal import GymTrainedInterface, GymTrainingInterface
+# from gym_acnportal import GymTrainingInterface
 from gym_acnportal.algorithms import SimRLModelWrapper, GymBaseAlgorithm
 from gym_acnportal.gym_acnsim.envs.action_spaces import SimAction
 from gym_acnportal.gym_acnsim.envs import (
@@ -84,9 +82,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 # some functions to generate Simulation instances that simulate this
 # scenario. We'll start by defining a function which generates random
 # plugins for a single EVSE.
-def random_plugin(
-    num, time_limit, evse, laxity_ratio=1 / 2, max_rate=32, voltage=208, period=1
-) -> List[events.Event]:
+def random_plugin(num, time_limit, evse, laxity_ratio=1 / 2, max_rate=32, voltage=208, period=1) -> List[events.Event]:
     """ Returns a list of num random plugin events occurring anytime
     from time 0 to time_limit. Each plugin has a random arrival and
     departure under the time limit, and a satisfiable requested
@@ -406,7 +402,8 @@ class GymTrainedAlgorithmVectorized(BaseAlgorithm):
         env.action = self.model.predict(
             self._env.env_method("observation", env.observation)[0],
             env.reward,
-            env.done,
+            env.terminated,
+            env.truncated,
             env.info,
         )[0]
         env.schedule = env.action_to_schedule()

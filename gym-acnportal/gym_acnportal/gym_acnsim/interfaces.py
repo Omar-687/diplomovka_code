@@ -61,14 +61,22 @@ class GymTrainedInterface(Interface):
         """
         return self._simulator.network.active_station_ids
 
-    @property
-    def is_done(self) -> bool:
-        """ Returns if the simulation is complete (i.e. event queue is
-        empty).
+    # @property
+    # def is_done(self) -> bool:
+    #     """ Returns if the simulation is complete (i.e. event queue is
+    #     empty).
+    #
+    #     Returns:
+    #         bool: True if simulation is complete.
+    #     """
+    #     return self._simulator.event_queue.empty()
 
-        Returns:
-            bool: True if simulation is complete.
-        """
+    @property
+    def is_terminated(self) -> bool:
+        return self._simulator.event_queue.empty()
+
+    @property
+    def is_truncated(self):
         return self._simulator.event_queue.empty()
 
     @property
