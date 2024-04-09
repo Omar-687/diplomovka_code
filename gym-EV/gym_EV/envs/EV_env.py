@@ -4,8 +4,10 @@ import math
 import pytz
 from datetime import datetime
 
-import matplotlib.pyplot as plt
+import gym_EV.envs.EV_env_optim
 
+
+import matplotlib.pyplot as plt
 from acnportal import acnsim
 from acnportal import algorithms
 import gymnasium
@@ -122,7 +124,7 @@ class EVEnv(gymnasium.Env):
     # if action gives less than it will be plus
     self.tracking_error = self.beta * (np.sum(action[:self.n_EVs]) - self.signal) ** 2
     # by default self.flexibility will be 0 by these settings
-    reward = (self.flexibility - self.tracking_error - self.penalty) / 100
+    reward = (self.flexibility - self.tracking_error - self.penalty) / 200
     print('reward',reward)
     print('signal = ',self.signal)
     print('action = ', np.sum(action[:self.n_EVs]))

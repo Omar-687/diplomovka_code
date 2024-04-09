@@ -210,10 +210,10 @@ class AdaptiveChargingOptimization:
         obj = cp.Constant(0)
         for component in self.objective_configuration:
             obj += component.coefficient * component.function(
-                rates,
-                active_sessions,
-                infrastructure,
-                self.interface,
+                rates=rates,
+                active_sessions=active_sessions,
+                infrastructure=infrastructure,
+                interface=self.interface,
                 **_merge_dicts(kwargs, component.kwargs),
             )
         return obj
@@ -381,7 +381,7 @@ def equal_share(rates, active_sessions, infrastructure, interface, **kwargs):
 
 def tou_energy_cost(rates, active_sessions, infrastructure, interface, **kwargs):
     current_prices = interface.get_prices(rates.shape[1])  # $/kWh
-    return -current_prices @ aggregate_period_energy(rates, infrastructure, interface)
+    return -current_prices @ aggregate_period_energy(rates=rates, active_sessions=active_sessions, infrastructure=infrastructure, interface=interface)
 
 
 def total_energy(rates, active_sessions, infrastructure, interface, **kwargs):
@@ -418,7 +418,7 @@ def load_flattening(rates, active_sessions, infrastructure, interface, external_
 #     if np.any(prev_mask):
 #         reg -= cp.norm(rates[0, prev_mask] - previous_rates[prev_mask], p=normp)
 #     return reg
-
+# ADDED
 def non_completion_penalty(rates, active_sessions:List[SessionInfo], infrastructure, interface, p_norm=1, **kwargs):
     if p_norm < 1:
         return ValueError("p_norm must be at least 1.")

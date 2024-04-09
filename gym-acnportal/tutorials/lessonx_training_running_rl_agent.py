@@ -89,6 +89,7 @@ from acnportal.algorithms import (
 )
 
 import gym_EV.envs
+from gym_EV.envs.EV_env_optim2 import EVEnvOptim
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 
@@ -329,7 +330,8 @@ gym_env_dict: Dict[str, str] = {
     "ev-rebuilding-acnsim-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:make_rebuilding_ev_sim_env",
     "ev-environment-v0": "gym_acnportal.gym_acnsim.envs.new_environment1:EVEnv",
     "tongxin-ev0":"gym_EV.envs:EVEnv",
-    "tongxin-ev1":"gym_EV.envs:EVEnvOptim",
+    "tongxin-ev1":"gym_EV.envs.EV_env_optim:EVEnvOptim",
+    "tongxin-ev2": "gym_EV.envs.EV_env_optim2:EVEnvOptim",
     # "tongxin-ev1":gym_EV.envs.,
 }
 # default-rebuilding-acnsim
@@ -381,46 +383,97 @@ vec_env = DummyVecEnv(
 #             )
 
 
-thesis_env = DummyVecEnv(
-    [
-        lambda: FlattenObservation(
-            gymnasium.make("ev-rebuilding-acnsim-v0",
-                interface_generating_function=interface_generating_function,
-            )
-        )
-    ]
-)
+# thesis_env = DummyVecEnv(
+#     [
+#         lambda: FlattenObservation(
+#             gymnasium.make("ev-rebuilding-acnsim-v0",
+#                 interface_generating_function=interface_generating_function,
+#             )
+#         )
+#     ]
+# )
 # environments seem to learn if the follow gymnasium interface
 # env = gymnasium.make("Pendulum-v1", render_mode="human")
 # env = gymnasium.make("MountainCarContinuous-v0")
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3 import SAC
+import numpy as np
+import matplotlib.pyplot as plt
 
+from stable_baselines3 import SAC
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.logger import Figure
+class FigureRecorderCallback(BaseCallback):
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
 
+    def _on_step(self):
+        # Plot values (here a random variable)
+        figure = plt.figure()
+        figure.add_subplot().plot(np.random.random(3))
+        # Close the figure after logging it
+        self.logger.record("trajectory/figure", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
+        plt.close()
+        return True
 # env = gymnasium.make("tongxin-ev0")
 
-env = gymnasium.make("tongxin-ev1")
 
 
 
+# env = gymnasium.make("tongxin-ev1")
 
+env = gymnasium.make("tongxin-ev2")
+
+# MlpPolicy
 # model = PPO("MlpPolicy", vec_env, verbose=2)
 model = SAC(policy="MlpPolicy",
             env=env,
             verbose=2,
+            tensorboard_log="/tmp/sac/"
             # learning_rate=3e-4,
             # batch_size=256,
             # buffer_size=10**6
             )
-# model = SAC("MlpPolicy", thesis_env, verbose=2)
+# model = SAC("MlpPolicy", env, verbose=2)
+mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=1, warn=False)
+print(f"mean_reward: {mean_reward:.2f} +/- {std_reward:.2f}")
+
+
 num_iterations: int = int(1e4)
-model_name: str = f"PPO2_{num_iterations}_test_{'default_rebuilding-1e3'}.zip"
+model_name: str = f"SAC_my_own.zip"
 n_episodes = 10
 n_max_timesteps = 1000
 num_iterations = n_episodes*n_max_timesteps
 print(num_iterations)
-max_episode_steps = 100000
-model.learn(total_timesteps=max_episode_steps,
-            log_interval=4)
-model.save(model_name)
+max_episode_steps = 100000 // 2
+
+
+
+del model # remove to demonstrate saving and loading
+
+
+
+model = SAC.load(model_name)
+
+# seems that the SAC my own zip is not a good model
+
+# model.learn(total_timesteps=max_episode_steps,
+#
+#             log_interval=4)
+# model.save(model_name)
+
+# model.load(model_name)
+# Evaluate the trained agent
+mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=1)
+#
+
+
+# TODO: print out more graphs probably from evaluation or testing
+# TODO: find what ep_rew_mean exactly is
+# TODO:
+print(f"mean_reward:{mean_reward:.2f} +/- {std_reward:.2f}")
+
+
 
 # We've trained the above model for 10000 iterations. Packaged with this
 # library is the same model trained for 1000000 iterations, which we

@@ -1,0 +1,475 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "S8wxkRpdMzwl"
+   },
+   "source": [
+    "*If running in Colab run this first to install ACN-Portal.*"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "bRvsN1Q9TEr2",
+    "ExecuteTime": {
+     "end_time": "2024-04-06T17:35:47.159214Z",
+     "start_time": "2024-04-06T17:35:47.122942Z"
+    }
+   },
+   "source": [
+    "import subprocess\n",
+    "import sys\n",
+    "\n",
+    "# if 'google.colab' in str(get_ipython()):\n",
+    "#     print('Running on CoLab')\n",
+    "#     subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"acnportal\"])\n",
+    "#     subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"git+https://github.com/caltech-netlab/adacharge\"])"
+   ],
+   "outputs": [],
+   "execution_count": 1
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "4Dx6R-26M6JP"
+   },
+   "source": [
+    "# Unbalanced Three-Phase Infrastructure Constraints\n",
+    "\n",
+    "Currently, most charging algorithms in the literature rely on constraints which assume single-phase or balanced three-phase operation. In this experiment, we demonstrate why these assumptions are insufficient for practical charging systems. \n",
+    "\n",
+    "For this experiment we use the consider two algorithms, 1) least-laxity first (LLF) and 2) Model Predictive Control (MPC). We also consider two cases, in the first we use a simplified single-phase representation of the constraints in the network. In the second, we use the full three-phase system model. In both cases, we evalaute the algorithms using the true three-phase network model."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "cM2mYe93TU0_",
+    "ExecuteTime": {
+     "end_time": "2024-04-06T17:36:01.114695Z",
+     "start_time": "2024-04-06T17:35:47.168726Z"
+    }
+   },
+   "source": [
+    "import pytz\n",
+    "from datetime import datetime\n",
+    "import numpy as np\n",
+    "# import cvxpy as cp\n",
+    "from copy import deepcopy\n",
+    "import time \n",
+    "from matplotlib import pyplot as plt\n",
+    "from matplotlib import cm\n",
+    "\n",
+    "from acnportal import acnsim\n",
+    "from acnportal.acnsim import analysis\n",
+    "from acnportal import algorithms\n",
+    "import adacharge"
+   ],
+   "outputs": [],
+   "execution_count": 2
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "JtsqSXf0OCo1"
+   },
+   "source": [
+    "## Single-phase CaltechACN Network\n",
+    "\n",
+    "In this *ChargingNetwork* we treat all EVSEs as if they were on the same phase by setting the phase angle for each to be 0. The only constraints for this model are that the aggregate rates of the AV and CC pods are less than 80 A and that the aggregate power of all EVSEs is less than the power limit of the transformer. \n",
+    "\n",
+    "(We assume nominal voltage in the network)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "daSbJIfqTQEL",
+    "ExecuteTime": {
+     "end_time": "2024-04-06T17:36:01.176Z",
+     "start_time": "2024-04-06T17:36:01.122269Z"
+    }
+   },
+   "source": [
+    "def single_phase_caltech_acn(basic_evse=False, voltage=208, transformer_cap=150, network_type=acnsim.ChargingNetwork):\n",
+    "    \"\"\" Predefined single phase ChargingNetwork for the Caltech ACN.\n",
+    "\n",
+    "    Args:\n",
+    "        basic_evse (bool): If True use BASIC EVSE type instead of actual AeroViroment and ClipperCreek types.\n",
+    "        voltage (float): Default voltage at the EVSEs. Does not affect the current rating of the transformer which is\n",
+    "            based on nominal voltages in the network. 277V LL for delta primary and 120V LN for wye secondary. [V]\n",
+    "        transformer_cap (float): Capacity of the transformer in the CaltechACN. Default: 150. [kW]\n",
+    "\n",
+    "    Attributes:\n",
+    "        See ChargingNetwork for Attributes.\n",
+    "    \"\"\"\n",
+    "    network = network_type()\n",
+    "\n",
+    "    if basic_evse:\n",
+    "        evse_type = {'AV': 'BASIC', 'CC': 'BASIC'}\n",
+    "    else:\n",
+    "        evse_type = {'AV': 'AeroVironment', 'CC': 'ClipperCreek'}\n",
+    "        \n",
+    "    # Define the sets of EVSEs in the Caltech ACN.\n",
+    "    CC_pod_ids = [\"CA-322\", \"CA-493\", \"CA-496\", \"CA-320\", \"CA-495\", \"CA-321\", \"CA-323\", \"CA-494\"]\n",
+    "    AV_pod_ids = [\"CA-324\", \"CA-325\",\"CA-326\",\"CA-327\",\"CA-489\", \"CA-490\", \"CA-491\", \"CA-492\"]\n",
+    "    other_ids = [f\"CA-{id_num}\" for id_num in [148, 149, 212, 213, 303, 304, 305, 306, 307, 308,\n",
+    "                                               309, 310, 311, 312, 313, 314, 315, 316, 317, 318,\n",
+    "                                               319, 497, 498, 499, 500, 501, 502, 503, 504, 505,\n",
+    "                                               506, 507, 508, 509, 510, 511, 512, 513]]\n",
+    "    all_ids = CC_pod_ids + AV_pod_ids + other_ids\n",
+    "\n",
+    "    # Add Caltech EVSEs\n",
+    "    for evse_id in all_ids:\n",
+    "        if evse_id not in CC_pod_ids:\n",
+    "            network.register_evse(acnsim.get_evse_by_type(evse_id, evse_type['AV']), voltage, 0)\n",
+    "        else:\n",
+    "            network.register_evse(acnsim.get_evse_by_type(evse_id, evse_type['CC']), voltage, 0)\n",
+    "            \n",
+    "    # Add Caltech Constraint Set\n",
+    "    CC_pod = acnsim.Current(CC_pod_ids)\n",
+    "    AV_pod = acnsim.Current(AV_pod_ids)\n",
+    "    all_current = acnsim.Current(all_ids)\n",
+    "\n",
+    "    # Build constraint set\n",
+    "    network.add_constraint(CC_pod, 80, name='CC Pod')\n",
+    "    network.add_constraint(AV_pod, 80, name='AV Pod')\n",
+    "    network.add_constraint(all_current, transformer_cap * 1000 / voltage, name='Transformer Cap')\n",
+    "    return network"
+   ],
+   "outputs": [],
+   "execution_count": 3
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "YTGuRUk-PPGu"
+   },
+   "source": [
+    "## Experiment Setup"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "ExecuteTime": {
+     "end_time": "2024-04-06T17:36:01.222381Z",
+     "start_time": "2024-04-06T17:36:01.187634Z"
+    }
+   },
+   "source": [
+    "def experiment(algorithm):\n",
+    "    \"\"\" Run single phase vs. three phase experiment for a particular algorithm. \"\"\"\n",
+    "    # -- Experiment Parameters ---------------------------------------------------\n",
+    "    timezone = pytz.timezone('America/Los_Angeles')\n",
+    "    start = timezone.localize(datetime(2018, 9, 5))\n",
+    "    end = timezone.localize(datetime(2018, 9, 6))\n",
+    "    period = 5  # minute\n",
+    "    voltage = 208  # volts\n",
+    "    default_battery_power = 32 * voltage / 1000 # kW\n",
+    "    site = 'caltech'\n",
+    "\n",
+    "    # -- Network -------------------------------------------------------------------\n",
+    "    single_phase_cn = single_phase_caltech_acn(basic_evse=True, transformer_cap=70)\n",
+    "    real_cn = acnsim.sites.caltech_acn(basic_evse=True, transformer_cap=70)\n",
+    "\n",
+    "    # -- Events ---------------------------------------------------------------------\n",
+    "    API_KEY = 'DEMO_TOKEN'\n",
+    "    events = acnsim.acndata_events.generate_events(API_KEY, site, start, end, period, \n",
+    "                                                   voltage, default_battery_power)\n",
+    "    \n",
+    "    # -- Single Phase ----------------------------------------------------------------\n",
+    "    single_phase_sim = acnsim.Simulator(deepcopy(single_phase_cn), algorithm, \n",
+    "                                        deepcopy(events), start, period=period, \n",
+    "                                        verbose=False)\n",
+    "    single_phase_sim.run()\n",
+    "    \n",
+    "    # Since we are interested in how the single-phase LLF algorithm would have performed \n",
+    "    # in the real CaltechACN, we replace the network model with the real network model \n",
+    "    # for analysis. \n",
+    "    single_phase_sim.network = real_cn\n",
+    "    \n",
+    "    # -- Three Phase -----------------------------------------------------------------        \n",
+    "    three_phase_sim = acnsim.Simulator(deepcopy(real_cn), algorithm,\n",
+    "                                       deepcopy(events), start, period=period, \n",
+    "                                       verbose=False)\n",
+    "    three_phase_sim.run()\n",
+    "    \n",
+    "    return single_phase_sim, three_phase_sim"
+   ],
+   "outputs": [],
+   "execution_count": 4
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "tYsq2kGfPCRi"
+   },
+   "source": [
+    "## Running Experiment"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "ULP4AFoMPWBh"
+   },
+   "source": [
+    "### Least Laxity First"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "xPZbsQhKTBbf",
+    "ExecuteTime": {
+     "end_time": "2024-04-06T17:38:31.713266Z",
+     "start_time": "2024-04-06T17:36:01.252985Z"
+    }
+   },
+   "source": [
+    "llf = algorithms.SortedSchedulingAlgo(algorithms.least_laxity_first)\n",
+    "llf_sp_sim, llf_tp_sim = experiment(llf)"
+   ],
+   "outputs": [],
+   "execution_count": 5
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "h8vcUY2ZPYOb"
+   },
+   "source": [
+    "### Model Predictive Control"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "MMO9pQ5J51cH",
+    "jupyter": {
+     "is_executing": true
+    },
+    "ExecuteTime": {
+     "start_time": "2024-04-06T17:38:31.717788Z"
+    }
+   },
+   "source": [
+    "quick_charge_obj = [adacharge.ObjectiveComponent(adacharge.quick_charge),\n",
+    "                    adacharge.ObjectiveComponent(adacharge.equal_share, 1e-12),\n",
+    "                    # adacharge.ObjectiveComponent(adacharge.non_completion_penalty, 1e-12),\n",
+    "                    ]\n",
+    "mpc = adacharge.AdaptiveSchedulingAlgorithm(quick_charge_obj, solver=\"ECOS\")\n",
+    "mpc_sp_sim, mpc_tp_sim = experiment(mpc)"
+   ],
+   "outputs": [],
+   "execution_count": null
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "edJlAV5wPesD"
+   },
+   "source": [
+    "## Results\n",
+    "\n",
+    "In order to compare the single-phase and three-phase versions of LLF, we plot the aggregate power of all EVSEs as well as individual line currents on the primary and secondary side of the transformer which feeds the CaltechACN. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 263
+    },
+    "colab_type": "code",
+    "id": "MBhusqQV8ZAe",
+    "outputId": "3b668259-2f13-4baf-ef86-a9627b1a3834",
+    "jupyter": {
+     "is_executing": true
+    }
+   },
+   "source": [
+    "def plot_currents(single_phase_sim, three_phase_sim, transfomer_cap):\n",
+    "    cmap = cm.get_cmap('tab20c')\n",
+    "\n",
+    "    fig, axes = plt.subplots(3, 2, sharey='row', sharex=True, figsize=(6,4))\n",
+    "    fig.subplots_adjust(wspace=0.17, hspace=0.17)\n",
+    "    axes[0, 0].set_xlim(7*12, 17*12)\n",
+    "    \n",
+    "    for i in range(3):\n",
+    "        for j in range(2):\n",
+    "            axes[i, j].spines['right'].set_visible(False)\n",
+    "            axes[i, j].spines['top'].set_visible(False)\n",
+    "\n",
+    "    # Plot Aggregate Charging Power\n",
+    "    sp_agg = analysis.aggregate_current(single_phase_sim)*208/1000\n",
+    "    tp_agg = analysis.aggregate_current(three_phase_sim)*208/1000\n",
+    "    sp_color = 4\n",
+    "    tp_color = 0\n",
+    "    axes[0, 0].plot(sp_agg, color=cmap(sp_color))\n",
+    "    axes[0, 1].plot(tp_agg, color=cmap(tp_color))\n",
+    "\n",
+    "\n",
+    "    # Calculate currents in constrained lines\n",
+    "    sp_cc = analysis.constraint_currents(single_phase_sim)\n",
+    "    tp_cc = analysis.constraint_currents(three_phase_sim)\n",
+    "\n",
+    "    # Plot currents in lines on the Primary and Secondary side of the transformer.\n",
+    "    for j, line in enumerate('ABC'): \n",
+    "        axes[1, 0].plot(sp_cc['Primary {0}'.format(line)], label='Primary {0}'.format(line), color=cmap(j + sp_color))\n",
+    "        axes[1, 1].plot(tp_cc['Primary {0}'.format(line)], label='Primary {0}'.format(line), color=cmap(j + tp_color))\n",
+    "\n",
+    "        axes[2, 0].plot(sp_cc['Secondary {0}'.format(line)], label='Secondary {0}'.format(line), color=cmap(j + sp_color))\n",
+    "        axes[2, 1].plot(tp_cc['Secondary {0}'.format(line)], label='Secondary {0}'.format(line), color=cmap(j + tp_color))\n",
+    "\n",
+    "    # Plot limits \n",
+    "    axes[0, 0].axhline(transfomer_cap, color='k', linestyle='--')\n",
+    "    axes[1, 0].axhline(transfomer_cap*1000/277/3, color='k', linestyle='--')\n",
+    "    axes[2, 0].axhline(transfomer_cap*1000/120/3, color='k', linestyle='--')\n",
+    "\n",
+    "    axes[0, 1].axhline(transfomer_cap, color='k', linestyle='--')\n",
+    "    axes[1, 1].axhline(transfomer_cap*1000/277/3, color='k', linestyle='--')\n",
+    "    axes[2, 1].axhline(transfomer_cap*1000/120/3, color='k', linestyle='--')\n",
+    "\n",
+    "    axes[0, 0].set_title(\"Single Phase Constraints\")\n",
+    "    axes[0, 1].set_title(\"Three Phase Constriants\")\n",
+    "    \n",
+    "    fig.text(0.015, 0.77, 'Aggregate\\nPower (kW)', va='center', rotation='vertical')\n",
+    "    fig.text(0.015, 0.37, 'Line Currents (A)', va='center', rotation='vertical')\n",
+    "    fig.text(0.04, 0.50, 'Secondary', va='center', rotation='vertical')\n",
+    "    fig.text(0.04, 0.24, 'Primary', va='center', rotation='vertical')\n",
+    "        \n",
+    "    plt.xticks(range(7*12, 17*12, 36), ['7:00', '10:00', '13:00', '16:00'])\n",
+    "    plt.show()\n",
+    "    return fig"
+   ],
+   "outputs": [],
+   "execution_count": null
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Least Laxity First"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "jupyter": {
+     "is_executing": true
+    }
+   },
+   "source": [
+    "llf_fig = plot_currents(llf_sp_sim, llf_tp_sim, 70)"
+   ],
+   "outputs": [],
+   "execution_count": null
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "jupyter": {
+     "is_executing": true
+    }
+   },
+   "source": [
+    "llf_fig.savefig(f\"figures/llf_single_v_three_phase.pdf\", dpi=300)"
+   ],
+   "outputs": [],
+   "execution_count": null
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Model Predictive Control"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "jupyter": {
+     "is_executing": true
+    }
+   },
+   "source": [
+    "mpc_fig = plot_currents(mpc_sp_sim, mpc_tp_sim, 70)"
+   ],
+   "outputs": [],
+   "execution_count": null
+  },
+  {
+   "cell_type": "code",
+   "metadata": {
+    "jupyter": {
+     "is_executing": true
+    }
+   },
+   "source": [
+    "mpc_fig.savefig(f\"figures/mpc_single_v_three_phase.pdf\", dpi=300)"
+   ],
+   "outputs": [],
+   "execution_count": null
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "65VBWKw_RNjr"
+   },
+   "source": [
+    "Here we can see that only considering single-phase constraints can lead to significant constraint violations in line currents for both algorithms. However, by designing an algorithm which considers the full three-phase model, we are able to respect these constraints. Note that because of phase unbalance, we are not able to make use of the full 70 kW transformer capacity while also respecting line limits using LLF. MPC allows us to fully utilize the capacity but still takes longer to deliver the same amount of energy due to contraints from phase imbalances."
+   ]
+  }
+ ],
+ "metadata": {
+  "colab": {
+   "collapsed_sections": [],
+   "include_colab_link": true,
+   "name": "unbalanced_three_phase_infrastructure.ipynb",
+   "provenance": []
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.1"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}

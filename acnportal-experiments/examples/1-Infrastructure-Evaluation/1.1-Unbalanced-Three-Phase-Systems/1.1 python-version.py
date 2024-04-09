@@ -8,7 +8,7 @@ from copy import deepcopy
 import time
 from matplotlib import pyplot as plt
 from matplotlib import cm
-
+from acnportal.signals.tariffs.tou_tariff import TimeOfUseTariff
 from acnportal import acnsim
 from acnportal.acnsim import analysis
 from acnportal import algorithms
@@ -72,7 +72,7 @@ def experiment(algorithm):
     voltage = 208  # volts
     default_battery_power = 32 * voltage / 1000  # kW
     site = 'caltech'
-
+    signals = {'tariff': TimeOfUseTariff('sce_tou_ev_4_march_2019')}
     # -- Network -------------------------------------------------------------------
     single_phase_cn = single_phase_caltech_acn(basic_evse=True, transformer_cap=70)
     real_cn = acnsim.sites.caltech_acn(basic_evse=True, transformer_cap=70)
@@ -85,7 +85,7 @@ def experiment(algorithm):
     # -- Single Phase ----------------------------------------------------------------
     single_phase_sim = acnsim.Simulator(deepcopy(single_phase_cn), algorithm,
                                         deepcopy(events), start, period=period,
-                                        verbose=False)
+                                        verbose=False,signals=signals)
     single_phase_sim.run()
 
     # Since we are interested in how the single-phase LLF algorithm would have performed
@@ -96,7 +96,7 @@ def experiment(algorithm):
     # -- Three Phase -----------------------------------------------------------------
     three_phase_sim = acnsim.Simulator(deepcopy(real_cn), algorithm,
                                        deepcopy(events), start, period=period,
-                                       verbose=False)
+                                       verbose=False, signals=signals)
     three_phase_sim.run()
 
     return single_phase_sim, three_phase_sim
@@ -105,65 +105,28 @@ def experiment(algorithm):
 # llf = algorithms.SortedSchedulingAlgo(algorithms.least_laxity_first)
 # llf_sp_sim, llf_tp_sim = experiment(llf)
 
-quick_charge_obj = [adacharge.ObjectiveComponent(adacharge.quick_charge),
-                    adacharge.ObjectiveComponent(adacharge.equal_share, 1e-12),
-                    adacharge.ObjectiveComponent(adacharge.non_completion_penalty, 1e-12),
+quick_charge_obj = [
+        adacharge.ObjectiveComponent(adacharge.tou_energy_cost)
+    # adacharge.ObjectiveComponent(adacharge.quick_charge),
+                    # adacharge.ObjectiveComponent(adacharge.equal_share, 1e-12),
+                    # adacharge.ObjectiveComponent(adacharge.non_completion_penalty, 1e-12),
                     ]
 mpc = adacharge.AdaptiveSchedulingAlgorithm(quick_charge_obj, solver="ECOS")
 mpc_sp_sim, mpc_tp_sim = experiment(mpc)
 
 
-def plot_currents(single_phase_sim, three_phase_sim, transfomer_cap):
-    cmap = cm.get_cmap('tab20c')
 
-    fig, axes = plt.subplots(3, 2, sharey='row', sharex=True, figsize=(6, 4))
-    fig.subplots_adjust(wspace=0.17, hspace=0.17)
-    axes[0, 0].set_xlim(7 * 12, 17 * 12)
+total_energy_prop = acnsim.proportion_of_energy_delivered(mpc_tp_sim)
+print('Proportion of requested energy delivered: {0}'.format(total_energy_prop))
 
-    for i in range(3):
-        for j in range(2):
-            axes[i, j].spines['right'].set_visible(False)
-            axes[i, j].spines['top'].set_visible(False)
+print('Peak aggregate current: {0} A'.format(mpc_tp_sim.peak))
 
-    # Plot Aggregate Charging Power
-    sp_agg = analysis.aggregate_current(single_phase_sim) * 208 / 1000
-    tp_agg = analysis.aggregate_current(three_phase_sim) * 208 / 1000
-    sp_color = 4
-    tp_color = 0
-    axes[0, 0].plot(sp_agg, color=cmap(sp_color))
-    axes[0, 1].plot(tp_agg, color=cmap(tp_color))
+# Plotting aggregate current
+agg_current = acnsim.aggregate_current(mpc_tp_sim)
+plt.plot(agg_current)
+plt.xlabel('Time (periods)')
+plt.ylabel('Current (A)')
+plt.title('Total Aggregate Current')
+plt.show()
 
-    # Calculate currents in constrained lines
-    sp_cc = analysis.constraint_currents(single_phase_sim)
-    tp_cc = analysis.constraint_currents(three_phase_sim)
 
-    # Plot currents in lines on the Primary and Secondary side of the transformer.
-    for j, line in enumerate('ABC'):
-        axes[1, 0].plot(sp_cc['Primary {0}'.format(line)], label='Primary {0}'.format(line), color=cmap(j + sp_color))
-        axes[1, 1].plot(tp_cc['Primary {0}'.format(line)], label='Primary {0}'.format(line), color=cmap(j + tp_color))
-
-        axes[2, 0].plot(sp_cc['Secondary {0}'.format(line)], label='Secondary {0}'.format(line),
-                        color=cmap(j + sp_color))
-        axes[2, 1].plot(tp_cc['Secondary {0}'.format(line)], label='Secondary {0}'.format(line),
-                        color=cmap(j + tp_color))
-
-    # Plot limits
-    axes[0, 0].axhline(transfomer_cap, color='k', linestyle='--')
-    axes[1, 0].axhline(transfomer_cap * 1000 / 277 / 3, color='k', linestyle='--')
-    axes[2, 0].axhline(transfomer_cap * 1000 / 120 / 3, color='k', linestyle='--')
-
-    axes[0, 1].axhline(transfomer_cap, color='k', linestyle='--')
-    axes[1, 1].axhline(transfomer_cap * 1000 / 277 / 3, color='k', linestyle='--')
-    axes[2, 1].axhline(transfomer_cap * 1000 / 120 / 3, color='k', linestyle='--')
-
-    axes[0, 0].set_title("Single Phase Constraints")
-    axes[0, 1].set_title("Three Phase Constriants")
-
-    fig.text(0.015, 0.77, 'Aggregate\nPower (kW)', va='center', rotation='vertical')
-    fig.text(0.015, 0.37, 'Line Currents (A)', va='center', rotation='vertical')
-    fig.text(0.04, 0.50, 'Secondary', va='center', rotation='vertical')
-    fig.text(0.04, 0.24, 'Primary', va='center', rotation='vertical')
-
-    plt.xticks(range(7 * 12, 17 * 12, 36), ['7:00', '10:00', '13:00', '16:00'])
-    plt.show()
-    return fig
