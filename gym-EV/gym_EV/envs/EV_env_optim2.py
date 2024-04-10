@@ -3,7 +3,10 @@ from scipy import stats
 import math
 import pytz
 from datetime import datetime
-
+from gym_EV.envs.utils import (plot_daily_price,
+                               plot_substation_rates_given_by_operator,
+                               plot_charging_rate_over_time,
+                               plot_table_for_other_info)
 
 from decimal import Decimal
 import gymnasium
@@ -62,12 +65,15 @@ class EVEnvOptim(gymnasium.Env):
     self.smoothing = 0.0
     # store EV charging result
     self.charging_result = []
+    self.charged_energy_over_day = []
     self.initial_bat = []
     self.dic_bat = {}
     self.day = None
     # self.selection = "Random"
     self.selection = "Optimization"
     self.price = []
+    self.start_date = None
+    self.end_date = None
     self.cost = 0
     self.power = 0
     self.tuning_parameter = tuning
@@ -75,7 +81,7 @@ class EVEnvOptim(gymnasium.Env):
     self.total_charging_error = 0
     self.total_tracking_error = 0
     self.total_reward = 0
-
+    self.all_requested_energy = 0
 
     # Specify the observation space
     lower_bound = np.array([0])
@@ -89,6 +95,10 @@ class EVEnvOptim(gymnasium.Env):
     self.overall_cost = 0
     self.overall_energy_delivered = 0
     self.overall_requested_energy = 0
+
+    # TODO:how to change env variable before evaluating
+    # self.evaluation = False
+    # self.evaluation = True
     self.evaluation = False
 
     self.generated_signals_in_one_day = []
@@ -101,6 +111,7 @@ class EVEnvOptim(gymnasium.Env):
     upper_bound = 1
     low = np.tile(lower_bound, self.number_level)
     high = np.tile(upper_bound, self.number_level)
+    # test with action space [-1,1] and also rescaling or find if it is ok to have [0,1]
     self.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
     self.time_step = 1
@@ -138,8 +149,7 @@ class EVEnvOptim(gymnasium.Env):
     return signal
 
   def step(self, action):
-
-
+    # update global time
     self.time = self.time + self.time_interval
     self.time_normalised = self.time_normalised + self.time_step
     self.mark = self.mark + 1
@@ -147,6 +157,7 @@ class EVEnvOptim(gymnasium.Env):
     # changed price according article
     self.price = np.append(self.price, 1 - self.time / 24)
 
+    # EDF sorting according arrival from first to last
     self.state = np.array(sorted(self.state,key=lambda x: x[0]))
     tmp_signal = 0
     if self.mark == self.control_steps:
@@ -157,6 +168,7 @@ class EVEnvOptim(gymnasium.Env):
 
       self.signal = self.smoothing * np.mean(self.signal_buffer) + (1 - self.smoothing) * tmp_signal
       self.signal_buffer.append(self.signal)
+      self.generated_signals_in_one_day.append(self.signal)
     # Time advances
     self.all_requested_energy = 0
 
@@ -173,7 +185,8 @@ class EVEnvOptim(gymnasium.Env):
           self.state[idx, 0] = (self.data[i][1].ev.departure - self.data[i][1].ev.arrival)*(self.time_interval)
           self.state[idx, 1] =  self.data[i][1].ev.requested_energy
           self.state[idx, 2] = 1
-    # TODO: add EDF
+
+    # process of charging
     self.remaining_signal = self.signal
     given_charging_rates = []
     for i in range(len(self.state)):
@@ -223,12 +236,16 @@ class EVEnvOptim(gymnasium.Env):
 
     # Compute tracking error
     self.tracking_error = self.beta * abs(np.sum(given_charging_rates) - self.signal)
-    o1, o2, o3 = 0.1, 0.2, 2
+    self.charged_energy_over_day.append(np.sum(given_charging_rates))
+
+    # o1, o2, o3 = 0.1, 0.2, 2
+    o1, o2, o3 = 0.1, 10, 2
     reward = (self.flexibility +
               o1 * np.linalg.norm(given_charging_rates) -
               o2 * self.penalty -
               o3 * self.tracking_error)
     self.total_reward += reward
+
 
     # end episode at the end of the given day
     done = True if self.time >= 24 or self.done else False
@@ -253,6 +270,27 @@ class EVEnvOptim(gymnasium.Env):
     return random_date
 
   def reset(self, seed=None, options=None):
+    # self.evaluation and
+    if len(self.generated_signals_in_one_day) != 0:
+      start_date_str =  self.start_date.strftime("%d.%m.%Y")
+      end_date_str = self.end_date.strftime("%d.%m.%Y")
+      # plot_substation_rates_given_by_operator(self.generated_signals_in_one_day,
+      #                                         self.time_period,
+      #                                         start_date_str,
+      #                                         end_date_str)
+      # plot_charging_rate_over_time(self.charged_energy_over_day,
+      #                              self.time_period,
+      #                              start_date_str,
+      #                              end_date_str)
+      overall_energy_charged = np.sum(self.charged_energy_over_day)
+      number_of_evs = len(self.data)
+      plot_table_for_other_info(overall_energy_charged=overall_energy_charged,
+                                overall_energy_requested=self.all_requested_energy,
+                                total_charging_costs=self.overall_cost,
+                                number_of_evs=number_of_evs,
+                                start_date=start_date_str,
+                                end_date=end_date_str)
+
     # Timezone of the ACN we are using.
     timezone = pytz.timezone('America/Los_Angeles')
 
@@ -261,7 +299,9 @@ class EVEnvOptim(gymnasium.Env):
                                                 2019,12,1)
     random_end_date = random_date + timedelta(days=1)
     start = timezone.localize(random_date)
+    self.start_date = start
     end = timezone.localize(random_end_date)
+    self.end_date = end
 
     # How long each time discrete time interval in the simulation should be.
     period = self.time_period  # minutes
@@ -283,14 +323,9 @@ class EVEnvOptim(gymnasium.Env):
     if len(self.data) == 0:
       self.done = 1
 
-    # Reset values
-    self.signal = None
-    self.state = None
+    # # Reset values
     self.flexibility = 0
-    self.total_flexibility = 0
-    self.penalty = 0
     self.tracking_error = 0
-    self.charging_result = []
 
     # Initialize states and time
     self.state = np.zeros([self.max_ev, 3])
@@ -304,17 +339,18 @@ class EVEnvOptim(gymnasium.Env):
     self.signal_buffer.clear()
     self.signal_buffer.append(self.signal)
     self.charging_result = []
+    self.charged_energy_over_day = []
 
     # Generate random price sequence
     # self.price = np.append(self.price, random.random())
+    self.generated_signals_in_one_day = []
     self.price = []
+    self.overall_cost = 0
     self.cost = 0
     self.total_flexibility = 0
     self.total_charging_error = 0
     self.total_tracking_error = 0
     self.total_reward = 0
-
     self.penalty = 0
-    self.charging_result = []
     obs = np.append(self.state[:, 0:2].flatten(), self.signal)
     return obs, {}

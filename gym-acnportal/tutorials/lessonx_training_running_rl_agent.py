@@ -423,6 +423,11 @@ class FigureRecorderCallback(BaseCallback):
 # env = gymnasium.make("tongxin-ev1")
 
 env = gymnasium.make("tongxin-ev2")
+# wrap env by monitor next time
+
+# env.evaluation = True
+
+
 
 # MlpPolicy
 # model = PPO("MlpPolicy", vec_env, verbose=2)
@@ -435,18 +440,22 @@ model = SAC(policy="MlpPolicy",
             # buffer_size=10**6
             )
 # model = SAC("MlpPolicy", env, verbose=2)
+
+print('untrained...')
 mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=1, warn=False)
 print(f"mean_reward: {mean_reward:.2f} +/- {std_reward:.2f}")
-
+print('trained...')
 
 num_iterations: int = int(1e4)
-model_name: str = f"SAC_my_own.zip"
+model_name: str = f"SAC_current_alg.zip"
 n_episodes = 10
 n_max_timesteps = 1000
 num_iterations = n_episodes*n_max_timesteps
 print(num_iterations)
 max_episode_steps = 100000 // 2
 
+model.learn(total_timesteps=max_episode_steps,
+            log_interval=4)
 
 
 del model # remove to demonstrate saving and loading
@@ -455,11 +464,9 @@ del model # remove to demonstrate saving and loading
 
 model = SAC.load(model_name)
 
-# seems that the SAC my own zip is not a good model
+# fix rewqard possibly
 
-# model.learn(total_timesteps=max_episode_steps,
-#
-#             log_interval=4)
+
 # model.save(model_name)
 
 # model.load(model_name)
