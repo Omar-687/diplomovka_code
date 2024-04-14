@@ -36,7 +36,8 @@ class EVEnvOptim(gymnasium.Env):
 
   # tuning = 50 before, according to article it should be 6 * 10^3
   # max capacity should be 150, not 20
-  def __init__(self, max_ev=54, number_level=10, max_capacity=20,  max_rate=6.6, tuning=6e3):
+  # tuning 6e3 seems to favor price too much
+  def __init__(self, max_ev=54, number_level=10, max_capacity=20,  max_rate=6.6, tuning=6e5):
     # Parameter for reward function
     self.alpha = 1
     self.beta = 1

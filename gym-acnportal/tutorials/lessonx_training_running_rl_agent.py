@@ -342,20 +342,20 @@ gym_env_dict: Dict[str, str] = {
 #     "default-rebuilding-acnsim-v0": "envs:make_rebuilding_default_sim_env",
 # }
 
-# registration test
+# registration
 for env_name, env_entry_point in gym_env_dict.items():
     if env_name not in env_ids:
         register(id=env_name, entry_point=env_entry_point)
-env_name = "default-rebuilding-acnsim-v0"
-for key in gym_env_dict.keys():
-    try:
-        gymnasium.make(key)
-        print(f"The '{key}' environment exists.")
-    except gymnasium.error.UnregisteredEnv:
-        print(f"The '{key}' environment does not exist.")
-    except Exception as e:
-        # Handling other types of exceptions
-        print(f'Environment {key} registered. An error occurred: {e}')
+# env_name = "default-rebuilding-acnsim-v0"
+# for key in gym_env_dict.keys():
+#     try:
+#         gymnasium.make(key)
+#         print(f"The '{key}' environment exists.")
+#     except gymnasium.error.UnregisteredEnv:
+#         print(f"The '{key}' environment does not exist.")
+#     except Exception as e:
+#         # Handling other types of exceptions
+#         print(f'Environment {key} registered. An error occurred: {e}')
 del register, registry, all_envs, gym_env_dict, List, Dict
 
 
@@ -399,7 +399,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3 import SAC
 import numpy as np
 import matplotlib.pyplot as plt
-
+from stable_baselines3.common.env_checker import check_env
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
@@ -422,8 +422,24 @@ class FigureRecorderCallback(BaseCallback):
 
 # env = gymnasium.make("tongxin-ev1")
 
-env = gymnasium.make("tongxin-ev2")
+# env = gymnasium.make("tongxin-ev2",
+#                      render_mode='human',
+#                      evaluation=True)
+
+from stable_baselines3.common.monitor import Monitor
+env = gymnasium.make("tongxin-ev2",
+                     render_mode='human',
+                     evaluation=True
+                     )
+env = Monitor(env)
+# check environment
+check_env(env)
+
+
 # wrap env by monitor next time
+
+
+
 
 # env.evaluation = True
 
@@ -442,42 +458,48 @@ model = SAC(policy="MlpPolicy",
 # model = SAC("MlpPolicy", env, verbose=2)
 
 print('untrained...')
-mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=1, warn=False)
+mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=3, warn=False)
 print(f"mean_reward: {mean_reward:.2f} +/- {std_reward:.2f}")
 print('trained...')
-
-num_iterations: int = int(1e4)
-model_name: str = f"SAC_current_alg.zip"
-n_episodes = 10
-n_max_timesteps = 1000
-num_iterations = n_episodes*n_max_timesteps
-print(num_iterations)
-max_episode_steps = 100000 // 2
-
-model.learn(total_timesteps=max_episode_steps,
-            log_interval=4)
-
-
-del model # remove to demonstrate saving and loading
+#
+# num_iterations: int = int(1e4)
+model_name: str = f"SAC_current_algcap20-tuning1e6-gamma100-smoothing06-50ksteps-wosignalpenalty.zip"
+# # n_episodes = 10
+# # n_max_timesteps = 1000
+# # num_iterations = n_episodes*n_max_timesteps
+# # print(num_iterations)
+# max_episode_steps = 100000 // 2
+# # # #
+# # # # # log interval if we want to print out progress
+# model.learn(total_timesteps=max_episode_steps, log_interval=4)
+# model.save(model_name)
+# # #
+# del model # remove to demonstrate saving and loading
 
 
 
 model = SAC.load(model_name)
-
-# fix rewqard possibly
-
-
-# model.save(model_name)
-
-# model.load(model_name)
-# Evaluate the trained agent
-mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=1)
+# # #
+# # # # fix rewqard possibly
+# # #
+env = gymnasium.make("tongxin-ev2",
+                      render_mode='human',
+                      evaluation=True
+                     )
+env = Monitor(env)
+# # check environment
+check_env(env)
+# # # model.save(model_name)
+# #
+# # # model.load(model_name)
+# # # Evaluate the trained agent
+mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=3)
+# #
 #
-
-
-# TODO: print out more graphs probably from evaluation or testing
-# TODO: find what ep_rew_mean exactly is
-# TODO:
+#
+# # TODO: print out more graphs probably from evaluation or testing
+# # TODO: find what ep_rew_mean exactly is
+# # TODO:
 print(f"mean_reward:{mean_reward:.2f} +/- {std_reward:.2f}")
 
 

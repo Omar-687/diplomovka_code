@@ -58,7 +58,7 @@ def plot_charging_rate_over_time(charging_rates, period=12, start_date="", end_d
         time += time_interval
     #     TODO: fix case if signals is shorter than time, for example if there are no evs in given day
     if len(x_values) != len(charging_rates):
-        raise ValueError('x axis and y axis must have same length!')
+        raise ValueError(f'x axis and y axis must have same length! {len(x_values)},{len(charging_rates)}')
     fig, ax = plt.subplots()
     ax.plot(x_values, charging_rates)
 
@@ -74,6 +74,82 @@ def plot_mse_over_time():
     ...
 def plot_mpe_over_time():
     ...
+
+
+
+def plot_arrivals(events, period, start_date,end_date):
+    time_interval = period / 60
+    time = 0
+    x_values = {}
+
+    # 24*60 / period 121 steps
+    for i in range(0,(24*60//period) + 1):
+        x_values[i] = 0
+    # while time <= 24:
+    #     x_values[time] = 0
+    #     time += time_interval
+
+    for event in events:
+        x_values[event[0]] += 1
+
+
+
+    fig, ax = plt.subplots()
+    ax.plot(x_values.keys(), x_values.values())
+    #
+    #
+    #
+    #
+
+    ax.set(xlabel='Time (hours)', ylabel='Number of arrivals',
+           title=f'Arrivals of EVs ({start_date} - {end_date})')
+
+    xticks = np.arange(0, (24*60//period) + 1, 120/period)
+
+    xticks_labels = np.arange(0, 24 + 1, 2)
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xticks_labels)
+
+    plt.show()
+
+
+def plot_departures(events, period, start_date,end_date):
+    time_interval = period / 60
+    time = 0
+    x_values = {}
+
+    # 24*60 / period 121 steps
+    for i in range(0,(24*60//period) + 1):
+        x_values[i] = 0
+    # while time <= 24:
+    #     x_values[time] = 0
+    #     time += time_interval
+
+    for event in events:
+        if event[1].ev.departure not in x_values.keys():
+            continue
+        x_values[event[1].ev.departure] += 1
+
+
+
+    fig, ax = plt.subplots()
+    ax.plot(x_values.keys(), x_values.values())
+    #
+    #
+    #
+    #
+
+    ax.set(xlabel='Time (hours)', ylabel='Number of departures',
+           title=f'Departures of EVs ({start_date} - {end_date})')
+
+    xticks = np.arange(0, (24*60//period) + 1, 120/period)
+
+    xticks_labels = np.arange(0, 24 + 1, 2)
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xticks_labels)
+
+    plt.show()
+
 # overall energy charged
 # overall requested energy
 # percent of energy requested satisfied
